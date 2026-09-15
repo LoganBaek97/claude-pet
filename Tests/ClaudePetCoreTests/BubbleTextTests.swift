@@ -32,9 +32,17 @@ final class BubbleTextTests: XCTestCase {
         XCTAssertEqual(BubbleText.text(for: agg(.waiting, cwd: "")), "입력 대기")
     }
 
-    func testEmphasis() {
-        XCTAssertTrue(BubbleText.isEmphasized(.waiting))
-        XCTAssertTrue(BubbleText.isEmphasized(.failed))
-        XCTAssertFalse(BubbleText.isEmphasized(.running))
+    func testEmphasisSeparatesQuestionFromFailure() {
+        XCTAssertEqual(BubbleText.emphasis(for: .waiting), .question)
+        XCTAssertEqual(BubbleText.emphasis(for: .failed), .failure)
+        for state in [PetState.running, .review, .idle] {
+            XCTAssertEqual(BubbleText.emphasis(for: state), BubbleEmphasis.none, "\(state) 는 강조하지 않는다")
+        }
+    }
+
+    func testOnlyEmphasizedLevelsAreEmphasized() {
+        XCTAssertTrue(BubbleEmphasis.question.isEmphasized)
+        XCTAssertTrue(BubbleEmphasis.failure.isEmphasized)
+        XCTAssertFalse(BubbleEmphasis.none.isEmphasized)
     }
 }

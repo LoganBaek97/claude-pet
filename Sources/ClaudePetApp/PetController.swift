@@ -50,7 +50,7 @@ final class PetController {
         aggregate = agg
         director.setState(agg.state)
         let before = bubble.frame.size
-        let after = bubble.update(text: BubbleText.text(for: agg), emphasized: BubbleText.isEmphasized(agg.state), maxWidth: 220)
+        let after = bubble.update(text: BubbleText.text(for: agg), emphasis: BubbleText.emphasis(for: agg.state), maxWidth: 220)
         if before != after { onLayoutChange?() }
     }
 

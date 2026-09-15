@@ -1,5 +1,14 @@
 import Foundation
 
+/// 말풍선이 얼마나, 어떤 성격으로 눈에 띄어야 하는지.
+/// question 은 답을 기다리는 상태, failure 는 무언가 잘못된 상태다.
+public enum BubbleEmphasis: Equatable, Sendable {
+    case none, question, failure
+
+    /// none 이 아니면 흐려지지 않고 색 테두리를 갖는다.
+    public var isEmphasized: Bool { self != .none }
+}
+
 public enum BubbleText {
     public static func text(for agg: Aggregate) -> String? {
         guard let s = agg.session else { return nil }
@@ -22,7 +31,12 @@ public enum BubbleText {
         }
     }
 
-    public static func isEmphasized(_ state: PetState) -> Bool {
-        state == .waiting || state == .failed
+    /// 말풍선 강조 단계. 사용자가 개입해야 하는 두 상태를 서로 다른 색으로 구분한다.
+    public static func emphasis(for state: PetState) -> BubbleEmphasis {
+        switch state {
+        case .waiting: return .question
+        case .failed: return .failure
+        default: return .none
+        }
     }
 }
