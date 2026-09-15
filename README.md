@@ -22,6 +22,7 @@ Anthropic 공식 프로젝트가 아니다. 개인이 만든 비공식 도구다
 ### Homebrew
 
 ```sh
+brew trust LoganBaek97/tap
 brew install LoganBaek97/tap/claude-pet
 claude-pet install-hooks
 ln -sfn "$(brew --prefix)/opt/claude-pet/ClaudePet.app" /Applications/ClaudePet.app
@@ -29,7 +30,7 @@ claude-pet add guga
 open /Applications/ClaudePet.app
 ```
 
-Homebrew 는 앱을 자기 디렉터리에 두기 때문에 설정 변경과 `/Applications` 연결은 직접 한다. `brew upgrade` 를 해도 훅 경로는 그대로 쓸 수 있다.
+Homebrew 7 부터 서드파티 tap 은 `brew trust` 로 신뢰를 먼저 밝혀야 읽힌다. Homebrew 는 앱을 자기 디렉터리에 두기 때문에 설정 변경과 `/Applications` 연결은 직접 한다. `brew upgrade` 를 해도 훅 경로는 그대로 쓸 수 있다.
 
 ### 소스에서 직접
 
