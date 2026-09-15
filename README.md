@@ -17,7 +17,21 @@ Anthropic 공식 프로젝트가 아니다. 개인이 만든 비공식 도구다
 
 ## 설치
 
-내려받아 직접 빌드한다. 배포용 Apple Developer ID 서명이 없어서 미리 만든 바이너리를 받으면 Gatekeeper 가 막는다. 내 컴퓨터에서 빌드한 앱은 그런 제약이 없다.
+어느 쪽이든 내 컴퓨터에서 직접 빌드한다. 배포용 Apple Developer ID 서명이 없어서 미리 만든 바이너리를 받으면 Gatekeeper 가 막는다. 직접 빌드한 앱은 그런 제약이 없다.
+
+### Homebrew
+
+```sh
+brew install LoganBaek97/tap/claude-pet
+claude-pet install-hooks
+ln -sfn "$(brew --prefix)/opt/claude-pet/ClaudePet.app" /Applications/ClaudePet.app
+claude-pet add guga
+open /Applications/ClaudePet.app
+```
+
+Homebrew 는 앱을 자기 디렉터리에 두기 때문에 설정 변경과 `/Applications` 연결은 직접 한다. `brew upgrade` 를 해도 훅 경로는 그대로 쓸 수 있다.
+
+### 소스에서 직접
 
 ```sh
 git clone https://github.com/LoganBaek97/claude-pet.git
@@ -61,6 +75,8 @@ swift test                 # Core 단위 테스트
 sh Tests/hook/run.sh       # 훅 스크립트 테스트
 swift build && .build/debug/ClaudePetApp
 ```
+
+`scripts/bundle.sh` 의 release 빌드는 기본으로 arm64·x86_64 유니버설을 만든다. 현재 아키텍처만 필요하면 `CLAUDE_PET_UNIVERSAL=0 sh scripts/bundle.sh` 를 쓴다.
 
 ## 라이선스
 

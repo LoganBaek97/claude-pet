@@ -11,13 +11,15 @@ command -v swift >/dev/null 2>&1 || {
   exit 1
 }
 
-if [ "$CONFIG" = release ]; then
-  swift build -c release --arch arm64 --arch x86_64 2>&1 | tail -1
-  BIN=$(swift build -c release --arch arm64 --arch x86_64 --show-bin-path)
+# release 는 기본으로 유니버설. CLAUDE_PET_UNIVERSAL=0 이면 현재 아키텍처만 만든다.
+# Homebrew 처럼 설치하는 기계에서 직접 빌드하는 경우에 쓴다.
+if [ "$CONFIG" = release ] && [ "${CLAUDE_PET_UNIVERSAL:-1}" = 1 ]; then
+  set -- -c release --arch arm64 --arch x86_64
 else
-  swift build -c "$CONFIG" 2>&1 | tail -1
-  BIN=$(swift build -c "$CONFIG" --show-bin-path)
+  set -- -c "$CONFIG"
 fi
+swift build "$@" 2>&1 | tail -1
+BIN=$(swift build "$@" --show-bin-path)
 
 APP="dist/ClaudePet.app"
 rm -rf "$APP"
