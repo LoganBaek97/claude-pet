@@ -18,6 +18,14 @@ if [ "$CONFIG" = release ] && [ "${CLAUDE_PET_UNIVERSAL:-1}" = 1 ]; then
 else
   set -- -c "$CONFIG"
 fi
+# 추가 swift 플래그. Homebrew 처럼 이미 샌드박스 안에서 빌드하는 경우
+# SwiftPM 이 샌드박스를 또 만들다 실패해서 --disable-sandbox 를 넣어야 한다.
+if [ -n "${CLAUDE_PET_SWIFT_FLAGS:-}" ]; then
+  # 의도적으로 분리한다.
+  # shellcheck disable=SC2086
+  set -- "$@" $CLAUDE_PET_SWIFT_FLAGS
+fi
+
 swift build "$@" 2>&1 | tail -1
 BIN=$(swift build "$@" --show-bin-path)
 
