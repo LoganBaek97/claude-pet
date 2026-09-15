@@ -1,0 +1,6 @@
+.build/
+*.xcodeproj
+.DS_Store
+dist/
+.scratch/
+docs/superpowers/plans/
