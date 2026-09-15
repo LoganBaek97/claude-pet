@@ -12,8 +12,40 @@ Anthropic 공식 프로젝트가 아니다. 개인이 만든 비공식 도구다
 ## 요구 사항
 
 - macOS 14 (Sonoma) 이상
-- Xcode Command Line Tools (`xcode-select --install`)
 - Claude Code
+- Command Line Tools (아래 참고)
+
+Xcode 는 필요 없다. 용량이 큰 Xcode 대신 Command Line Tools 만 있으면 된다.
+
+### Command Line Tools
+
+이 앱은 미리 만든 바이너리를 받는 대신 내 컴퓨터에서 빌드한다. 그래서 애플이 무료로 주는 빌드 도구 묶음인 Command Line Tools 가 필요하다. 한 번 설치하면 다시 할 일은 없다.
+
+설치되어 있는지 확인한다. 버전이 나오면 이미 있는 것이다.
+
+```sh
+pkgutil --pkg-info=com.apple.pkg.CLTools_Executables
+```
+
+없으면 설치한다. 설치 창이 뜨면 안내를 따른다.
+
+```sh
+xcode-select --install
+```
+
+**이미 설치되어 있어도 버전이 낮으면 Homebrew 가 빌드를 거부한다.** `Your Command Line Tools are too outdated` 라는 오류가 그것이다. 위 명령은 이미 설치된 경우 아무 일도 하지 않으니, 이때는 갱신해야 한다. 시스템 설정의 소프트웨어 업데이트에서 Command Line Tools 항목을 설치하면 된다. 터미널로 하려면 먼저 목록을 보고,
+
+```sh
+softwareupdate --list
+```
+
+거기 나온 `Label:` 값을 그대로 넘긴다. 제목이 아니라 레이블이어야 한다.
+
+```sh
+sudo softwareupdate --install "Command Line Tools for Xcode 26.6-26.6"
+```
+
+약 900MB 를 받고 재시작은 필요 없다.
 
 ## 설치
 
