@@ -27,6 +27,12 @@ public final class Preferences: @unchecked Sendable {
         set { d.set(newValue, forKey: "isHidden") }
     }
 
+    /// 말풍선을 아예 띄우지 않는다. 펫은 그대로 두고 글자만 없애고 싶을 때 쓴다.
+    public var isBubbleHidden: Bool {
+        get { d.bool(forKey: "isBubbleHidden") }
+        set { d.set(newValue, forKey: "isBubbleHidden") }
+    }
+
     public var position: CGPoint? {
         get {
             guard let x = d.object(forKey: "positionX") as? Double, let y = d.object(forKey: "positionY") as? Double else { return nil }

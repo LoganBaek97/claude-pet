@@ -54,6 +54,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         hover?.start()
 
+        controller.isBubbleHidden = prefs.isBubbleHidden
         loadSelectedPet()
         controller.start()
 
@@ -70,7 +71,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.statusMenu?.popUp(at: e, in: self.controller.view)
         }
         DistributedNotificationCenter.default().addObserver(forName: Preferences.changedNotification, object: nil, queue: .main) { [weak self] _ in
-            self?.loadSelectedPet(); self?.layout()
+            guard let self else { return }
+            self.controller.isBubbleHidden = self.prefs.isBubbleHidden
+            self.loadSelectedPet(); self.layout()
         }
         promptForHooksIfNeeded()
         if warning == nil && !hooksInstalled { warning = Self.hooksMissingWarning }
@@ -107,6 +110,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 extension AppDelegate: StatusMenuDelegate {
     var isPetVisible: Bool { panel.isVisible }
+    var isBubbleVisible: Bool { !prefs.isBubbleHidden }
     var pets: [InstalledPet] { availablePets() }
     var currentPetId: String? { controller.pet?.id }
     var scale: Double { prefs.scale }
@@ -121,6 +125,13 @@ extension AppDelegate: StatusMenuDelegate {
             panel.orderFrontRegardless(); prefs.isHidden = false
             controller.start(); hover?.start()
         }
+    }
+
+    /// 말풍선만 끈다. 펫은 그대로 두므로 패널은 계속 떠 있다.
+    func toggleBubble() {
+        prefs.isBubbleHidden.toggle()
+        controller.isBubbleHidden = prefs.isBubbleHidden
+        layout()
     }
 
     func selectPet(id: String) {

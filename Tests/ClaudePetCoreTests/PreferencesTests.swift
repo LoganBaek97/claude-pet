@@ -14,15 +14,17 @@ final class PreferencesTests: XCTestCase {
         XCTAssertNil(p.selectedPetId)
         XCTAssertEqual(p.scale, 0.5)
         XCTAssertFalse(p.isHidden)
+        XCTAssertFalse(p.isBubbleHidden, "말풍선은 기본으로 보인다")
         XCTAssertNil(p.position)
     }
 
     func testRoundTrip() {
         let p = fresh()
-        p.selectedPetId = "guga"; p.scale = 1.0; p.isHidden = true; p.position = CGPoint(x: 10, y: 20)
+        p.selectedPetId = "guga"; p.scale = 1.0; p.isHidden = true; p.isBubbleHidden = true; p.position = CGPoint(x: 10, y: 20)
         XCTAssertEqual(p.selectedPetId, "guga")
         XCTAssertEqual(p.scale, 1.0)
         XCTAssertTrue(p.isHidden)
+        XCTAssertTrue(p.isBubbleHidden)
         XCTAssertEqual(p.position, CGPoint(x: 10, y: 20))
         p.position = nil
         XCTAssertNil(p.position)

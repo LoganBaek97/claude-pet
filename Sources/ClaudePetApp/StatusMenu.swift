@@ -4,6 +4,7 @@ import ServiceManagement
 
 protocol StatusMenuDelegate: AnyObject {
     var isPetVisible: Bool { get }
+    var isBubbleVisible: Bool { get }
     var pets: [InstalledPet] { get }
     var currentPetId: String? { get }
     var scale: Double { get }
@@ -11,6 +12,7 @@ protocol StatusMenuDelegate: AnyObject {
     var hooksInstalled: Bool { get }
     var warning: String? { get }
     func toggleVisible()
+    func toggleBubble()
     func selectPet(id: String)
     func setScale(_ s: Double)
     func toggleLoginItem()
@@ -47,6 +49,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
             menu.addItem(i); menu.addItem(.separator())
         }
         menu.addItem(make(d.isPetVisible ? "펫 숨기기" : "펫 보이기", #selector(toggleVisible)))
+        menu.addItem(make(d.isBubbleVisible ? "대화창 끄기" : "대화창 켜기", #selector(toggleBubble)))
 
         let petsMenu = NSMenu()
         for pet in d.pets {
@@ -90,6 +93,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
     }
 
     @objc private func toggleVisible() { delegate?.toggleVisible() }
+    @objc private func toggleBubble() { delegate?.toggleBubble() }
     @objc private func selectPet(_ sender: NSMenuItem) { if let id = sender.representedObject as? String { delegate?.selectPet(id: id) } }
     @objc private func setScale(_ sender: NSMenuItem) { if let s = sender.representedObject as? Double { delegate?.setScale(s) } }
     @objc private func toggleLoginItem() { delegate?.toggleLoginItem() }

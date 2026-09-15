@@ -15,6 +15,11 @@ final class PetController {
     private(set) var aggregate: Aggregate = .empty
     private(set) var pet: InstalledPet?
 
+    /// 켜면 말풍선을 아예 띄우지 않는다. 펫 애니메이션은 그대로 둔다.
+    var isBubbleHidden = false {
+        didSet { if isBubbleHidden != oldValue { refreshBubble() } }
+    }
+
     init() {
         view.onClick = { [weak self] in self?.handleClick() }
     }
@@ -49,8 +54,15 @@ final class PetController {
     func apply(_ agg: Aggregate) {
         aggregate = agg
         director.setState(agg.state)
+        refreshBubble()
+    }
+
+    /// 현재 상태와 설정으로 말풍선을 다시 그린다. 크기가 바뀌면 패널 레이아웃을 다시 잡게 한다.
+    private func refreshBubble() {
         let before = bubble.frame.size
-        let after = bubble.update(text: BubbleText.text(for: agg), emphasis: BubbleText.emphasis(for: agg.state), maxWidth: 220)
+        let after = bubble.update(text: isBubbleHidden ? nil : BubbleText.text(for: aggregate),
+                                  emphasis: isBubbleHidden ? .none : BubbleText.emphasis(for: aggregate.state),
+                                  maxWidth: 220)
         if before != after { onLayoutChange?() }
     }
 
