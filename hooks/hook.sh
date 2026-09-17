@@ -22,6 +22,39 @@ event=$(first_value hook_event_name)
 tool=$(first_value tool_name)
 cwd=$(first_value cwd)
 
+# Claude Desktop 이 호스팅하는 세션이면 앱의 세션 ID 가 환경에 있다. 딥링크는
+# 이 값만 받는다(`^local_[A-Za-z0-9-]{1,64}$`). 형식이 어긋나면 비워서 링크에서 뺀다.
+host=${CLAUDE_CODE_HOST_SESSION_ID:-}
+hrest=${host#local_}
+if [ "$hrest" = "$host" ] || [ -z "$hrest" ] || [ ${#hrest} -gt 64 ]; then
+  host=""
+else
+  case "$hrest" in *[!A-Za-z0-9-]*) host="";; esac
+fi
+
+# 호스트 앱: 조상 프로세스를 거슬러 올라가 가장 바깥쪽 .app 을 찾는다. 터미널에서
+# 띄운 CLI 면 Terminal/iTerm/Ghostty, 에디터 안이면 그 에디터가 잡힌다.
+# Claude Desktop 은 위에서 이미 확정했으니 ps 를 부르지 않는다.
+host_pid=""
+host_app=""
+if [ -z "$host" ]; then
+  host_line=$(ps -Ao pid=,ppid=,comm= 2>/dev/null | awk -v start="$PPID" '
+    { c=$0; sub(/^[ \t]*[0-9]+[ \t]+[0-9]+[ \t]+/, "", c); parent[$1]=$2; cmd[$1]=c }
+    END {
+      p = start
+      for (i = 0; i < 20 && p != "" && p > 1; i++) {
+        if (index(cmd[p], ".app/Contents/MacOS/") > 0) { outer = cmd[p]; outerpid = p }
+        p = parent[p]
+      }
+      if (outer != "") { sub(/\/Contents\/MacOS\/.*$/, "", outer); print outerpid " " outer }
+    }')
+  if [ -n "$host_line" ]; then
+    host_pid=${host_line%% *}
+    host_app=${host_line#* }
+    case "$host_pid" in *[!0-9]*) host_pid=""; host_app="";; esac
+  fi
+fi
+
 dir=${CLAUDE_PET_STATE_DIR:-"$HOME/Library/Application Support/ClaudePet/state"}
 file="$dir/$session.json"
 
@@ -39,8 +72,8 @@ esc() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
 mkdir -p "$dir" 2>/dev/null || exit 0
 ts=$(date +%s)
 tmp="$file.tmp.$$"
-printf '{"session_id":"%s","state":"%s","event":"%s","tool":"%s","cwd":"%s","ts":%s}\n' \
-  "$session" "$state" "$(esc "$event")" "$(esc "$tool")" "$(esc "$cwd")" "$ts" > "$tmp" 2>/dev/null \
+printf '{"session_id":"%s","state":"%s","event":"%s","tool":"%s","cwd":"%s","host_session":"%s","host_pid":%s,"host_app":"%s","ts":%s}\n' \
+  "$session" "$state" "$(esc "$event")" "$(esc "$tool")" "$(esc "$cwd")" "$host" "${host_pid:-0}" "$(esc "$host_app")" "$ts" > "$tmp" 2>/dev/null \
   && mv -f "$tmp" "$file" 2>/dev/null
 rm -f "$tmp" 2>/dev/null
 exit 0

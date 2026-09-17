@@ -6,15 +6,28 @@ public struct SessionState: Codable, Equatable, Sendable {
     public let event: String
     public let tool: String
     public let cwd: String
+    /// Claude Desktop 이 호스팅하는 세션의 앱 쪽 ID(`local_...`). 다른 호스트면 nil.
+    /// 예전 버전 훅이 쓴 파일에는 없으므로 옵셔널이어야 한다.
+    public let hostSessionId: String?
+    /// 세션을 띄운 GUI 앱의 pid 와 번들 경로. 조상 프로세스에서 찾는다.
+    /// Claude Desktop 세션이면 `hostSessionId` 로 충분해서 훅이 채우지 않는다.
+    public let hostPid: Int32?
+    public let hostApp: String?
     public let ts: TimeInterval
 
     enum CodingKeys: String, CodingKey {
-        case sessionId = "session_id", state, event, tool, cwd, ts
+        case sessionId = "session_id", state, event, tool, cwd
+        case hostSessionId = "host_session"
+        case hostPid = "host_pid"
+        case hostApp = "host_app"
+        case ts
     }
 
-    public init(sessionId: String, state: PetState, event: String = "", tool: String = "", cwd: String = "", ts: TimeInterval) {
+    public init(sessionId: String, state: PetState, event: String = "", tool: String = "", cwd: String = "",
+                hostSessionId: String? = nil, hostPid: Int32? = nil, hostApp: String? = nil, ts: TimeInterval) {
         self.sessionId = sessionId; self.state = state; self.event = event
-        self.tool = tool; self.cwd = cwd; self.ts = ts
+        self.tool = tool; self.cwd = cwd; self.hostSessionId = hostSessionId
+        self.hostPid = hostPid; self.hostApp = hostApp; self.ts = ts
     }
 
     public var timestamp: Date { Date(timeIntervalSince1970: ts) }

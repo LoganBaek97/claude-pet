@@ -3,7 +3,7 @@
 Claude Code 세션 상태에 반응하는 macOS 데스크톱 펫. 화면 구석의 픽셀 펫이 지금 작업 중인지, 내 입력을 기다리는지, 실패했는지, 끝났는지를 애니메이션으로 보여준다.
 
 - 세션이 여러 개면 가장 급한 상태를 따른다 (입력 대기 > 실패 > 작업 중 > 끝남 > 유휴)
-- 펫을 클릭하면 해당 Claude Desktop 세션으로 이동한다
+- 펫을 클릭하면 세션이 돌고 있는 앱으로 이동한다 — Claude Desktop 이면 그 세션까지, 터미널·에디터면 그 앱까지
 - 펫을 드래그해 원하는 위치에 두면 재시작해도 유지된다
 - 펫 자산은 Codex v1 포맷을 그대로 읽는다. [codex-pets.net](https://codex-pets.net) 의 펫을 `claude-pet add <id>` 로 설치한다
 
@@ -98,6 +98,8 @@ open /Applications/ClaudePet.app
 ## 동작 원리
 
 Claude Code 훅(`hooks/hook.sh`)이 이벤트마다 `~/Library/Application Support/ClaudePet/state/<session_id>.json` 을 쓰고, 앱이 그 디렉터리를 감시해 상태를 합성한다. 훅은 어떤 경우에도 `exit 0` 이고 stdout 에 아무것도 쓰지 않아서 Claude Code 동작에 끼어들지 않는다. 세션이 끝나면 상태 파일을 지운다.
+
+펫을 누르면 상태 파일에 기록된 호스트를 보고 갈 곳을 정한다. Claude Desktop 세션은 환경변수 `CLAUDE_CODE_HOST_SESSION_ID` 가 있어서 `claude://code/continue?session=local_...` 딥링크로 그 세션까지 간다(앱이 받는 형식은 `^local_[A-Za-z0-9-]{1,64}$` 뿐이라 Claude Code 쪽 세션 UUID 를 넣으면 거절당한다). 그 밖의 호스트는 훅이 조상 프로세스에서 찾아 둔 `.app` 번들과 pid 로 그 앱을 앞으로 가져온다.
 
 설계 문서: [docs/superpowers/specs/2026-09-15-claude-pet-design.md](docs/superpowers/specs/2026-09-15-claude-pet-design.md)
 

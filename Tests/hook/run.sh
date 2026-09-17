@@ -5,6 +5,8 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 HOOK="$HERE/../../hooks/hook.sh"
 FIX="$HERE/fixtures"
 export CLAUDE_PET_STATE_DIR=$(mktemp -d)
+# 이 테스트를 Claude Desktop 안에서 돌리면 진짜 호스트 세션 ID 가 상속된다. 기준선은 없는 상태.
+unset CLAUDE_CODE_HOST_SESSION_ID
 fail=0
 
 assert_eq() { # name expected actual
@@ -13,6 +15,11 @@ assert_eq() { # name expected actual
 field() { # file key -> value
   sed -n "s/.*\"$2\":\"\([^\"]*\)\".*/\1/p" "$1"
 }
+number() { # file key -> 따옴표 없는 수 값
+  sed -n "s/.*\"$2\":\([0-9][0-9]*\).*/\1/p" "$1"
+}
+# case 를 $( ) 안에 두면 bash 3.2 가 패턴의 ) 를 치환 끝으로 읽는다. 함수로 뺀다.
+is_number() { case "$1" in ''|*[!0-9]*) echo no;; *) echo yes;; esac; }
 run() { sh "$HOOK" < "$FIX/$1"; assert_eq "exit0 $1" 0 $?; }
 
 run pre-tool-use.json
@@ -23,6 +30,7 @@ assert_eq "event" PreToolUse "$(field "$f" event)"
 assert_eq "tool" Bash "$(field "$f" tool)"
 assert_eq "cwd first match" /Users/x/proj "$(field "$f" cwd)"
 assert_eq "ts numeric" yes "$(grep -q '"ts":[0-9][0-9]*}' "$f" && echo yes || echo no)"
+assert_eq "host_session empty without env" "" "$(field "$f" host_session)"
 assert_eq "single line" 1 "$(wc -l < "$f" | tr -d ' ')"
 
 run permission-request.json
@@ -34,7 +42,7 @@ assert_eq "review" review "$(field "$f" state)"
 run post-tool-use-failure.json
 f3="$CLAUDE_PET_STATE_DIR/sess-3.json"
 assert_eq "failed" failed "$(field "$f3" state)"
-assert_eq "backslash escaped, json stays valid" yes "$(grep -q '"cwd":"/Users/x/q \\\\","ts"' "$f3" && echo yes || echo no)"
+assert_eq "backslash escaped, json stays valid" yes "$(grep -q '"cwd":"/Users/x/q \\\\","host_session"' "$f3" && echo yes || echo no)"
 
 run session-end.json
 assert_eq "file removed" no "$([ -f "$f" ] && echo yes || echo no)"
@@ -49,6 +57,34 @@ assert_eq "unknown event ignored" "$before" "$after"
 
 run subagent-stop.json
 assert_eq "subagent stop creates no file" no "$([ -f "$CLAUDE_PET_STATE_DIR/sess-4.json" ] && echo yes || echo no)"
+
+# 호스트 세션 ID: Claude Desktop 이 호스팅할 때만 환경에 있고, 앱 딥링크가 받는
+# 형식(`local_` + 영숫자/하이픈 1~64자)이 아니면 기록하지 않는다.
+export CLAUDE_CODE_HOST_SESSION_ID=local_f1d6cbbb-68f8-4543-ae2f-d99f0f2c198e
+run pre-tool-use.json
+assert_eq "host_session from env" local_f1d6cbbb-68f8-4543-ae2f-d99f0f2c198e "$(field "$f" host_session)"
+
+# 호스트 세션 ID 가 있으면 Claude Desktop 이 확정이라 조상 탐색을 건너뛴다.
+assert_eq "desktop session skips host app lookup" "0 " "$(number "$f" host_pid) $(field "$f" host_app)"
+
+for bad in "" local_ session_abc local_has_underscore "local_$(printf 'a%.0s' $(seq 65))"; do
+  export CLAUDE_CODE_HOST_SESSION_ID="$bad"
+  run pre-tool-use.json
+  assert_eq "host_session rejected [$bad]" "" "$(field "$f" host_session)"
+done
+unset CLAUDE_CODE_HOST_SESSION_ID
+
+# 데스크톱 세션이 아니면 조상 프로세스에서 GUI 앱을 찾는다. 테스트를 어디서 돌리느냐에
+# 따라 터미널이 잡히기도, 아무것도 없기도 해서 모양만 본다.
+run pre-tool-use.json
+app=$(field "$f" host_app)
+pid=$(number "$f" host_pid)
+assert_eq "host_pid is a number" yes "$(is_number "$pid")"
+case "$app" in
+  "") assert_eq "no host app found, pid stays 0" 0 "$pid";;
+  *.app) assert_eq "host app is a bundle with a live pid" yes "$([ "$pid" -gt 0 ] && echo yes || echo no)";;
+  *) assert_eq "host app is a bundle path [$app]" yes no;;
+esac
 
 printf '' | sh "$HOOK"; assert_eq "empty stdin exit0" 0 $?
 printf '{not json' | sh "$HOOK"; assert_eq "broken json exit0" 0 $?
