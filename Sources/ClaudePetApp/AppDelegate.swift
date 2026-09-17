@@ -52,18 +52,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let inWindow = self.controller.view.convert(inView, to: nil)
             return self.panel.convertToScreen(inWindow)
         }
-        hover?.start()
 
         controller.isBubbleHidden = prefs.isBubbleHidden
         loadSelectedPet()
-        controller.start()
 
         watcher = StateWatcher(store: StateStore(directory: Paths.stateDirectory)) { [weak self] agg in
             self?.controller.apply(agg)
         }
         watcher?.start()
 
-        if !prefs.isHidden { panel.orderFrontRegardless() }
+        // 숨긴 채로 시작하면 렌더·호버 타이머를 켜지 않는다. toggleVisible 이 보일 때 켜고 숨길 때 끄는 것과 같은 규칙이다.
+        if !prefs.isHidden {
+            panel.orderFrontRegardless()
+            controller.start()
+            hover?.start()
+        }
 
         statusMenu = StatusMenu(delegate: self)
         controller.view.onRightClick = { [weak self] e in
