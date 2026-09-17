@@ -5,7 +5,7 @@ Claude Code 세션 상태에 반응하는 macOS 데스크톱 펫. 화면 구석�
 - 세션이 여러 개면 가장 급한 상태를 따른다 (입력 대기 > 실패 > 작업 중 > 끝남 > 유휴)
 - 펫을 클릭하면 세션이 돌고 있는 앱으로 이동한다 — Claude Desktop 이면 그 세션까지, 터미널·에디터면 그 앱까지
 - 펫을 드래그해 원하는 위치에 두면 재시작해도 유지된다
-- 펫 자산은 Codex v1 포맷을 그대로 읽는다. [codex-pets.net](https://codex-pets.net) 의 펫을 `claude-pet add <id>` 로 설치한다
+- 펫 자산은 Codex 포맷(v1 8열×9행, v2 8열×11행)을 그대로 읽는다. 버전은 `pet.json` 의 `spriteVersionNumber` 로 정한다(생략 시 v1). [codex-pets.net](https://codex-pets.net) 의 펫을 `claude-pet add <id>` 로 설치한다
 
 Anthropic 공식 프로젝트가 아니다. 개인이 만든 비공식 도구다.
 

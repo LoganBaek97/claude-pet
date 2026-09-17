@@ -25,7 +25,7 @@ final class PetController {
     }
 
     func loadPet(_ pet: InstalledPet) throws {
-        let sheet = try SpriteSheet(contentsOf: pet.spritesheetURL)
+        let sheet = try SpriteSheet(contentsOf: pet.spritesheetURL, spriteVersion: pet.manifest.spriteVersion)
         self.sheet = sheet
         self.pet = pet
         var counts: [SpriteRow: Int] = [:]

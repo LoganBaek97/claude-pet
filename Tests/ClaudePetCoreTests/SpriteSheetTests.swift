@@ -19,6 +19,34 @@ final class SpriteSheetTests: XCTestCase {
         }
     }
 
+    func testAcceptsV2SheetWhenDeclared() throws {
+        let image = TestImages.sheet(filledCells: [6, 8, 8, 4, 5, 8, 6, 6, 6, 8, 8], height: 2288)
+        let sheet = try SpriteSheet(image: image, spriteVersion: 2)
+        XCTAssertEqual(SpriteRow.allCases.map { sheet.frameCount(for: $0) }, [6, 8, 8, 4, 5, 8, 6, 6, 6])
+    }
+
+    /// 계약: spriteVersionNumber 를 생략(v1)한 펫이 2288 시트를 들고 오면 거부한다. 반대 조합도 거부한다.
+    func testRejectsHeightMismatchingDeclaredVersion() {
+        let v2 = TestImages.sheet(filledCells: [], height: 2288)
+        XCTAssertThrowsError(try SpriteSheet(image: v2)) { error in
+            XCTAssertEqual(error as? SpriteSheetError, .wrongSize(width: 1536, height: 2288))
+        }
+        let v1 = TestImages.sheet(filledCells: [])
+        XCTAssertThrowsError(try SpriteSheet(image: v1, spriteVersion: 2)) { error in
+            XCTAssertEqual(error as? SpriteSheetError, .wrongSize(width: 1536, height: 1872))
+        }
+    }
+
+    func testRejectsUnknownSpriteVersion() {
+        let v1 = TestImages.sheet(filledCells: [])
+        XCTAssertThrowsError(try SpriteSheet(image: v1, spriteVersion: 3)) { error in
+            XCTAssertEqual(error as? SpriteSheetError, .unsupportedSpriteVersion(3))
+        }
+        XCTAssertNil(SpriteSheet.atlasHeight(forSpriteVersion: 0))
+        XCTAssertEqual(SpriteSheet.atlasHeight(forSpriteVersion: 1), 1872)
+        XCTAssertEqual(SpriteSheet.atlasHeight(forSpriteVersion: 2), 2288)
+    }
+
     func testCutsFramesAndDropsTransparentCells() throws {
         let image = TestImages.sheet(filledCells: [6, 8, 8, 4, 5, 8, 6, 6, 6])
         let sheet = try SpriteSheet(image: image)

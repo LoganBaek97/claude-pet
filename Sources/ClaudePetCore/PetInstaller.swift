@@ -66,7 +66,7 @@ public struct PetInstaller: Sendable {
             throw PetInstallerError.noManifestInArchive
         }
         do {
-            _ = try SpriteSheet(contentsOf: sourcePet.spritesheetURL)
+            _ = try SpriteSheet(contentsOf: sourcePet.spritesheetURL, spriteVersion: sourcePet.manifest.spriteVersion)
         } catch {
             throw PetInstallerError.invalidSheet("\(error)")
         }

@@ -19,6 +19,17 @@ final class PetLibraryTests: XCTestCase {
         return dir
     }
 
+    func testSpriteVersionDefaultsToV1WhenOmitted() throws {
+        let dir = try makePet("user", "old")
+        XCTAssertEqual(PetLibrary.load(directory: dir, source: .user)?.manifest.spriteVersion, 1)
+        let v2 = root.appendingPathComponent("user/new", isDirectory: true)
+        try FileManager.default.createDirectory(at: v2, withIntermediateDirectories: true)
+        try #"{"id":"new","displayName":"N","description":"d","spriteVersionNumber":2,"spritesheetPath":"spritesheet.webp"}"#
+            .write(to: v2.appendingPathComponent("pet.json"), atomically: true, encoding: .utf8)
+        try Data().write(to: v2.appendingPathComponent("spritesheet.webp"))
+        XCTAssertEqual(PetLibrary.load(directory: v2, source: .user)?.manifest.spriteVersion, 2)
+    }
+
     func testDiscoversUserThenCodexAndDedupesById() throws {
         _ = try makePet("user", "guga", name: "user-guga")
         _ = try makePet("user", "clawd")
