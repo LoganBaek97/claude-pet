@@ -16,19 +16,22 @@ public enum BubbleText {
         func join(_ a: String, _ b: String) -> String {
             [a, b].filter { !$0.isEmpty }.joined(separator: " · ")
         }
+        let body: String
         switch agg.state {
         case .idle:
             return nil
         case .running:
-            return s.tool.isEmpty ? join("작업 중", project) : join(s.tool, project)
+            body = s.tool.isEmpty ? join("작업 중", project) : join(s.tool, project)
         case .waiting:
             let base = join("입력 대기", project)
-            return agg.waitingCount > 1 ? "\(base) +\(agg.waitingCount - 1)" : base
+            body = agg.waitingCount > 1 ? "\(base) +\(agg.waitingCount - 1)" : base
         case .failed:
-            return join("실패", s.tool.isEmpty ? project : s.tool)
+            body = join("실패", s.tool.isEmpty ? project : s.tool)
         case .review:
-            return join("끝남", project)
+            body = join("끝남", project)
         }
+        // Claude 가 기본이라 표식이 없고, 다른 에이전트만 이름을 앞에 단다.
+        return s.agent == .claude ? body : join(s.agent.displayName, body)
     }
 
     /// 말풍선 강조 단계. 사용자가 개입해야 하는 두 상태를 서로 다른 색으로 구분한다.

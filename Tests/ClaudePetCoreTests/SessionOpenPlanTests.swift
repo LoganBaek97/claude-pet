@@ -45,3 +45,23 @@ final class SessionOpenPlanTests: XCTestCase {
                        .activate(pid: 9, bundlePath: "/Applications/Antigravity.app"))
     }
 }
+
+// MARK: Codex 세션
+
+extension SessionOpenPlanTests {
+    func codex(pid: Int32? = nil, app: String? = nil) -> Aggregate {
+        let s = SessionState(sessionId: "c", state: .running, hostPid: pid, hostApp: app, agent: .codex, ts: 1)
+        return Aggregate(state: .running, session: s, waitingCount: 0, liveSessionCount: 1)
+    }
+
+    func testCodexSessionActivatesItsHostApp() {
+        XCTAssertEqual(SessionOpenPlanner.plan(for: codex(pid: 99, app: "/Applications/Codex.app")),
+                       .activate(pid: 99, bundlePath: "/Applications/Codex.app"))
+    }
+
+    /// Codex 세션은 단서가 없을 때 Claude Desktop 을 여는 폴백을 타지 않는다.
+    func testCodexSessionWithoutHostDoesNothing() {
+        XCTAssertEqual(SessionOpenPlanner.plan(for: codex()), .stay)
+        XCTAssertEqual(SessionOpenPlanner.plan(for: codex(app: "")), .stay)
+    }
+}

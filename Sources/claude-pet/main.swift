@@ -8,8 +8,11 @@ let args = Array(CommandLine.arguments.dropFirst())
 func usage() -> Never {
     print("""
     사용법: claude-pet <명령>
-      install-hooks        ~/.claude/settings.json 에 펫 훅을 추가한다 (백업 생성)
-      uninstall-hooks      펫 훅만 제거한다 (백업 생성)
+      install-hooks [claude|codex]
+                           펫 훅을 추가한다 (백업 생성). 인자가 없으면 Claude 와,
+                           ~/.codex 가 있으면 Codex 도 함께 설치한다
+      uninstall-hooks [claude|codex]
+                           펫 훅만 제거한다 (백업 생성). 대상 선택은 install-hooks 와 같다
       add <id>             codex-pets.net 에서 펫을 받아 설치한다 (예: add guga)
       use <id>             기본 펫을 지정한다
       list                 설치된 펫을 보여준다
@@ -40,6 +43,15 @@ func runAsync(_ body: @escaping @Sendable () async throws -> Void) -> Never {
     exit(0)
 }
 
+/// `install-hooks codex` 처럼 하나를 고르거나, 인자가 없으면 이 컴퓨터에서 쓰는 에이전트 전부.
+func hookTargets() -> [Agent] {
+    guard args.count >= 2 else { return Agent.installTargets() }
+    guard args.count == 2, let agent = Agent(rawValue: args[1]) else {
+        fail("모르는 에이전트입니다: \(args.dropFirst().joined(separator: " ")) (claude 또는 codex)")
+    }
+    return [agent]
+}
+
 guard let command = args.first else { usage() }
 
 switch command {
@@ -47,17 +59,22 @@ case "install-hooks":
     do {
         let script = BundleLayout.hookScript(executable: executable)
         guard FileManager.default.fileExists(atPath: script.path) else { fail("훅 스크립트가 없습니다: \(script.path)") }
-        let backup = try HooksInstaller.installFile(at: Paths.claudeSettingsFile, hookScript: script, now: Date())
-        print("훅을 설치했습니다. 백업: \(backup.path)")
-        print("새로 시작하는 Claude 세션부터 반영됩니다.")
+        for agent in hookTargets() {
+            let backup = try HooksInstaller.installFile(at: agent.settingsFile, hookScript: script, agent: agent, now: Date())
+            print("\(agent.displayName) 훅을 설치했습니다. 백업: \(backup.path)")
+            if let note = agent.postInstallNote { print("  → \(note)") }
+        }
+        print("새로 시작하는 세션부터 반영됩니다.")
     } catch { fail("설치 실패: \(error)") }
 
 case "uninstall-hooks":
     do {
-        if let backup = try HooksInstaller.uninstallFile(at: Paths.claudeSettingsFile, now: Date()) {
-            print("훅을 제거했습니다. 백업: \(backup.path)")
-        } else {
-            print("설치된 펫 훅이 없습니다.")
+        for agent in hookTargets() {
+            if let backup = try HooksInstaller.uninstallFile(at: agent.settingsFile, now: Date()) {
+                print("\(agent.displayName) 훅을 제거했습니다. 백업: \(backup.path)")
+            } else {
+                print("\(agent.displayName) 에 설치된 펫 훅이 없습니다.")
+            }
         }
     } catch { fail("제거 실패: \(error)") }
 
@@ -100,8 +117,11 @@ case "login-item":
     } catch { fail("변경 실패: \(error.localizedDescription)") }
 
 case "status":
-    let installed = HooksInstaller.isInstalled(file: Paths.claudeSettingsFile)
-    print("훅: \(installed ? "설치됨" : "미설치") (\(Paths.claudeSettingsFile.path))")
+    for agent in Agent.allCases {
+        let installed = HooksInstaller.isInstalled(file: agent.settingsFile)
+        let unused = agent.isAvailable(home: Paths.home) ? "" : "  — ~/.codex 없음, 설치 대상 아님"
+        print("\(agent.displayName) 훅: \(installed ? "설치됨" : "미설치") (\(agent.settingsFile.path))\(unused)")
+    }
     let now = Date()
     let sessions = StateStore(directory: Paths.stateDirectory).loadAll()
         .filter { now.timeIntervalSince($0.timestamp) <= StateAggregator.deadAfter }
@@ -110,7 +130,7 @@ case "status":
     print("합성 상태: \(agg.state.rawValue)  (살아 있는 세션 \(agg.liveSessionCount), 대기 \(agg.waitingCount))")
     for s in sessions {
         let age = Int(now.timeIntervalSince(s.timestamp))
-        print("  \(s.state.rawValue.padding(toLength: 8, withPad: " ", startingAt: 0)) \(s.projectName.padding(toLength: 24, withPad: " ", startingAt: 0)) \(s.tool.padding(toLength: 10, withPad: " ", startingAt: 0)) \(age)s 전  \(s.sessionId)")
+        print("  \(s.agent.rawValue.padding(toLength: 7, withPad: " ", startingAt: 0)) \(s.state.rawValue.padding(toLength: 8, withPad: " ", startingAt: 0)) \(s.projectName.padding(toLength: 24, withPad: " ", startingAt: 0)) \(s.tool.padding(toLength: 10, withPad: " ", startingAt: 0)) \(age)s 전  \(s.sessionId)")
     }
 
 case "help", "-h", "--help":

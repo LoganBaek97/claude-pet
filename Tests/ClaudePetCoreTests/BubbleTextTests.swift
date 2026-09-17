@@ -46,3 +46,24 @@ final class BubbleTextTests: XCTestCase {
         XCTAssertFalse(BubbleEmphasis.none.isEmphasized)
     }
 }
+
+// MARK: Codex 세션
+
+extension BubbleTextTests {
+    func codex(_ state: PetState, tool: String = "", waiting: Int = 0) -> Aggregate {
+        let s = SessionState(sessionId: "c", state: state, tool: tool, cwd: "/Users/x/my-project", agent: .codex, ts: 1)
+        return Aggregate(state: state, session: s, waitingCount: waiting, liveSessionCount: 1)
+    }
+
+    /// Codex 세션만 앞에 에이전트 이름을 붙인다. Claude 는 지금까지와 같다.
+    func testCodexSessionIsPrefixed() {
+        XCTAssertEqual(BubbleText.text(for: codex(.running, tool: "shell")), "Codex · shell · my-project")
+        XCTAssertEqual(BubbleText.text(for: codex(.running)), "Codex · 작업 중 · my-project")
+        XCTAssertEqual(BubbleText.text(for: codex(.waiting, waiting: 2)), "Codex · 입력 대기 · my-project +1")
+        XCTAssertEqual(BubbleText.text(for: codex(.review)), "Codex · 끝남 · my-project")
+    }
+
+    func testCodexIdleStaysHidden() {
+        XCTAssertNil(BubbleText.text(for: codex(.idle)))
+    }
+}

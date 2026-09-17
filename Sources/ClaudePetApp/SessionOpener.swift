@@ -10,9 +10,13 @@ enum SessionOpener {
         case .deepLink(let url):
             return openClaudeDesktop(then: url)
         case .activate(let pid, let bundlePath):
-            return activate(pid: pid, bundlePath: bundlePath) || openClaudeDesktop(then: nil)
+            if activate(pid: pid, bundlePath: bundlePath) { return true }
+            // 호스트 앱이 사라졌을 때의 폴백. Claude 세션만 Claude Desktop 으로 보낸다.
+            return agg.session?.agent == .claude && openClaudeDesktop(then: nil)
         case .claudeDesktop:
             return openClaudeDesktop(then: nil)
+        case .stay:
+            return false
         }
     }
 

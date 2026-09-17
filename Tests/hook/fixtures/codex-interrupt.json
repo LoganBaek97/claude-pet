@@ -1,0 +1,8 @@
+{
+  "session_id": "codex-1",
+  "transcript_path": "/Users/x/.codex/sessions/2026/09/17/rollout-codex-1.jsonl",
+  "cwd": "/Users/x/proj",
+  "hook_event_name": "Interrupt",
+  "model": "gpt-5.5",
+  "turn_id": "t-1"
+}

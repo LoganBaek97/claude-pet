@@ -9,14 +9,15 @@ protocol StatusMenuDelegate: AnyObject {
     var currentPetId: String? { get }
     var scale: Double { get }
     var isLoginItemEnabled: Bool { get }
-    var hooksInstalled: Bool { get }
+    /// 이 컴퓨터에서 쓰는 에이전트마다 훅 설치 여부. 메뉴에 한 줄씩 나온다.
+    var hookStatus: [(agent: Agent, installed: Bool)] { get }
     var warning: String? { get }
     func toggleVisible()
     func toggleBubble()
     func selectPet(id: String)
     func setScale(_ s: Double)
     func toggleLoginItem()
-    func installHooks()
+    func installHooks(agent: Agent)
     func downloadDefaultPet()
     func refresh()
 }
@@ -76,10 +77,13 @@ final class StatusMenu: NSObject, NSMenuDelegate {
 
         let login = make("로그인 시 실행", #selector(toggleLoginItem)); login.state = d.isLoginItemEnabled ? .on : .off
         menu.addItem(login)
-        if d.hooksInstalled {
-            let i = NSMenuItem(title: "훅: 설치됨", action: nil, keyEquivalent: ""); i.isEnabled = false; menu.addItem(i)
-        } else {
-            menu.addItem(make("훅 설치하기…", #selector(installHooks)))
+        for (agent, installed) in d.hookStatus {
+            if installed {
+                let i = NSMenuItem(title: "\(agent.displayName) 훅: 설치됨", action: nil, keyEquivalent: ""); i.isEnabled = false; menu.addItem(i)
+            } else {
+                let i = make("\(agent.displayName) 훅 설치하기…", #selector(installHooks(_:))); i.representedObject = agent.rawValue
+                menu.addItem(i)
+            }
         }
         menu.addItem(make("상태 다시 읽기", #selector(refresh)))
         menu.addItem(.separator())
@@ -97,7 +101,9 @@ final class StatusMenu: NSObject, NSMenuDelegate {
     @objc private func selectPet(_ sender: NSMenuItem) { if let id = sender.representedObject as? String { delegate?.selectPet(id: id) } }
     @objc private func setScale(_ sender: NSMenuItem) { if let s = sender.representedObject as? Double { delegate?.setScale(s) } }
     @objc private func toggleLoginItem() { delegate?.toggleLoginItem() }
-    @objc private func installHooks() { delegate?.installHooks() }
+    @objc private func installHooks(_ sender: NSMenuItem) {
+        if let raw = sender.representedObject as? String, let agent = Agent(rawValue: raw) { delegate?.installHooks(agent: agent) }
+    }
     @objc private func downloadDefaultPet() { delegate?.downloadDefaultPet() }
     @objc private func refresh() { delegate?.refresh() }
     @objc private func quit() { NSApp.terminate(nil) }

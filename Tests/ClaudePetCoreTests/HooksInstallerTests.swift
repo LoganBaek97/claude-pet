@@ -149,3 +149,51 @@ final class HooksInstallerTests: XCTestCase {
         XCTAssertEqual(try String(contentsOf: file, encoding: .utf8), original)
     }
 }
+
+// MARK: Codex
+
+extension HooksInstallerTests {
+    func timeouts(_ s: [String: Any], _ event: String) -> [Int] {
+        groups(s, event).flatMap { ($0["hooks"] as? [[String: Any]]) ?? [] }.compactMap { $0["timeout"] as? Int }
+    }
+
+    func testCodexCommandPassesAgentBeforeMarker() {
+        XCTAssertEqual(HooksInstaller.command(forHookScript: script, agent: .codex),
+                       "\"/Applications/ClaudePet.app/Contents/Resources/hook.sh\" --agent codex # claude-pet")
+        XCTAssertEqual(HooksInstaller.command(forHookScript: script, agent: .claude),
+                       HooksInstaller.command(forHookScript: script))
+    }
+
+    func testCodexInstallHooksOnlyCodexEventsWithCodexTimeouts() throws {
+        let out = try HooksInstaller.install(into: [:], hookScript: script, agent: .codex)
+        let hooks = out["hooks"] as? [String: Any]
+        XCTAssertEqual(Set(hooks?.keys ?? [:].keys), Set(Agent.codex.hookedEvents))
+        XCTAssertEqual(commands(out, "Interrupt"), [HooksInstaller.command(forHookScript: script, agent: .codex)])
+        XCTAssertEqual(timeouts(out, "Interrupt"), [3])
+        XCTAssertEqual(timeouts(out, "SessionEnd"), [3])
+        XCTAssertEqual(timeouts(out, "PreToolUse"), [5])
+        XCTAssertNil(hooks?["Notification"])
+        XCTAssertTrue(HooksInstaller.isInstalled(in: out))
+    }
+
+    /// 예전 버전이 Codex 파일에 Claude 목록으로 걸어 둔 항목은 재설치 때 걷어낸다.
+    func testCodexReinstallDropsOurEntriesForEventsCodexLacks() throws {
+        let stale = try HooksInstaller.install(into: [:], hookScript: script, agent: .claude)
+        let out = try HooksInstaller.install(into: stale, hookScript: script, agent: .codex)
+        let hooks = out["hooks"] as? [String: Any]
+        XCTAssertNil(hooks?["Notification"])
+        XCTAssertNil(hooks?["PostToolUseFailure"])
+        XCTAssertEqual(commands(out, "Stop"), [HooksInstaller.command(forHookScript: script, agent: .codex)])
+    }
+
+    func testCodexInstallFileWritesHooksJSON() throws {
+        let tmp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: tmp) }
+        let file = Agent.codex.settingsFile(home: tmp)
+        try HooksInstaller.installFile(at: file, hookScript: script, agent: .codex, now: Date())
+        XCTAssertTrue(HooksInstaller.isInstalled(file: file))
+        let data = try Data(contentsOf: file)
+        let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        XCTAssertEqual(commands(obj ?? [:], "Interrupt").count, 1)
+    }
+}

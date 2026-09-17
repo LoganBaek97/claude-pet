@@ -22,6 +22,8 @@ public enum EventMapper {
         case "PermissionRequest", "Notification": return .set(.waiting)
         case "PostToolUseFailure", "StopFailure": return .set(.failed)
         case "Stop": return .set(.review)
+        // Codex 전용. 사용자가 직접 끊은 것이라 알릴 게 없다.
+        case "Interrupt": return .set(.idle)
         default: return .ignore
         }
     }

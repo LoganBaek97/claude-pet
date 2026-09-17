@@ -1,6 +1,14 @@
 #!/bin/sh
-# claude-pet hook: Claude Code 이벤트를 세션별 상태 파일로 기록한다.
+# claude-pet hook: Claude Code / Codex 이벤트를 세션별 상태 파일로 기록한다.
+# 사용법: hook.sh [--agent claude|codex]   (기본 claude)
 # 어떤 경우에도 exit 0, stdout 출력 없음.
+
+# 에이전트: 설치기가 `--agent codex` 를 붙인다. 모르는 값은 claude 로 본다.
+agent=claude
+if [ "${1:-}" = "--agent" ]; then
+  case "${2:-}" in claude|codex) agent=$2;; esac
+fi
+
 payload=$(cat 2>/dev/null | tr -d '\n\r')
 [ -z "$payload" ] && exit 0
 
@@ -24,7 +32,10 @@ cwd=$(first_value cwd)
 
 # Claude Desktop 이 호스팅하는 세션이면 앱의 세션 ID 가 환경에 있다. 딥링크는
 # 이 값만 받는다(`^local_[A-Za-z0-9-]{1,64}$`). 형식이 어긋나면 비워서 링크에서 뺀다.
-host=${CLAUDE_CODE_HOST_SESSION_ID:-}
+# Claude Desktop 터미널에서 띄운 Codex 도 이 변수를 물려받지만 그 세션은 Claude 것이
+# 아니므로 Claude 일 때만 본다.
+host=""
+[ "$agent" = claude ] && host=${CLAUDE_CODE_HOST_SESSION_ID:-}
 hrest=${host#local_}
 if [ "$hrest" = "$host" ] || [ -z "$hrest" ] || [ ${#hrest} -gt 64 ]; then
   host=""
@@ -65,6 +76,7 @@ case "$event" in
   PermissionRequest|Notification) state=waiting;;
   PostToolUseFailure|StopFailure) state=failed;;
   Stop) state=review;;
+  Interrupt) state=idle;;
   *) exit 0;;
 esac
 
@@ -72,8 +84,8 @@ esc() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
 mkdir -p "$dir" 2>/dev/null || exit 0
 ts=$(date +%s)
 tmp="$file.tmp.$$"
-printf '{"session_id":"%s","state":"%s","event":"%s","tool":"%s","cwd":"%s","host_session":"%s","host_pid":%s,"host_app":"%s","ts":%s}\n' \
-  "$session" "$state" "$(esc "$event")" "$(esc "$tool")" "$(esc "$cwd")" "$host" "${host_pid:-0}" "$(esc "$host_app")" "$ts" > "$tmp" 2>/dev/null \
+printf '{"session_id":"%s","state":"%s","event":"%s","tool":"%s","cwd":"%s","host_session":"%s","host_pid":%s,"host_app":"%s","agent":"%s","ts":%s}\n' \
+  "$session" "$state" "$(esc "$event")" "$(esc "$tool")" "$(esc "$cwd")" "$host" "${host_pid:-0}" "$(esc "$host_app")" "$agent" "$ts" > "$tmp" 2>/dev/null \
   && mv -f "$tmp" "$file" 2>/dev/null
 rm -f "$tmp" 2>/dev/null
 exit 0

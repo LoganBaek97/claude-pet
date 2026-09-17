@@ -86,6 +86,29 @@ case "$app" in
   *) assert_eq "host app is a bundle path [$app]" yes no;;
 esac
 
+# 에이전트: 인자가 없으면 claude, --agent codex 면 codex 로 기록한다.
+run pre-tool-use.json
+assert_eq "agent defaults to claude" claude "$(field "$f" agent)"
+sh "$HOOK" --agent codex < "$FIX/pre-tool-use.json"; assert_eq "exit0 --agent codex" 0 $?
+assert_eq "agent codex recorded" codex "$(field "$f" agent)"
+assert_eq "state still running under codex" running "$(field "$f" state)"
+sh "$HOOK" --agent gemini < "$FIX/pre-tool-use.json"; assert_eq "exit0 unknown agent" 0 $?
+assert_eq "unknown agent falls back to claude" claude "$(field "$f" agent)"
+
+# Claude Desktop 터미널에서 codex 를 띄우면 CLAUDE_CODE_HOST_SESSION_ID 가 상속된다.
+# Codex 세션에 Claude 딥링크를 달면 클릭이 엉뚱한 앱으로 가므로, Claude 가 아니면 무시한다.
+export CLAUDE_CODE_HOST_SESSION_ID=local_f1d6cbbb-68f8-4543-ae2f-d99f0f2c198e
+sh "$HOOK" --agent codex < "$FIX/pre-tool-use.json"
+assert_eq "codex ignores inherited claude host session" "" "$(field "$f" host_session)"
+unset CLAUDE_CODE_HOST_SESSION_ID
+
+# Codex 전용 Interrupt: 사용자가 끊은 것이라 idle 로 가라앉힌다.
+sh "$HOOK" --agent codex < "$FIX/codex-interrupt.json"; assert_eq "exit0 interrupt" 0 $?
+fc="$CLAUDE_PET_STATE_DIR/codex-1.json"
+assert_eq "interrupt -> idle" idle "$(field "$fc" state)"
+assert_eq "interrupt event kept" Interrupt "$(field "$fc" event)"
+assert_eq "interrupt agent codex" codex "$(field "$fc" agent)"
+
 printf '' | sh "$HOOK"; assert_eq "empty stdin exit0" 0 $?
 printf '{not json' | sh "$HOOK"; assert_eq "broken json exit0" 0 $?
 out=$(sh "$HOOK" < "$FIX/stop.json"); assert_eq "no stdout" "" "$out"

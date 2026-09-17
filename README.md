@@ -1,9 +1,10 @@
 # claude-pet
 
-Claude Code 세션 상태에 반응하는 macOS 데스크톱 펫. 화면 구석의 픽셀 펫이 지금 작업 중인지, 내 입력을 기다리는지, 실패했는지, 끝났는지를 애니메이션으로 보여준다.
+Claude Code 와 Codex 세션 상태에 반응하는 macOS 데스크톱 펫. 화면 구석의 픽셀 펫이 지금 작업 중인지, 내 입력을 기다리는지, 실패했는지, 끝났는지를 애니메이션으로 보여준다.
 
-- 세션이 여러 개면 가장 급한 상태를 따른다 (입력 대기 > 실패 > 작업 중 > 끝남 > 유휴)
-- 펫을 클릭하면 세션이 돌고 있는 앱으로 이동한다 — Claude Desktop 이면 그 세션까지, 터미널·에디터면 그 앱까지
+- Claude Code 와 Codex(CLI·IDE 확장·데스크톱 앱) 세션을 함께 본다. 펫은 한 마리고, Codex 세션은 말풍선 앞에 `Codex ·` 가 붙는다
+- 세션이 여러 개면 에이전트를 가리지 않고 가장 급한 상태를 따른다 (입력 대기 > 실패 > 작업 중 > 끝남 > 유휴)
+- 펫을 클릭하면 세션이 돌고 있는 앱으로 이동한다 — Claude Desktop 이면 그 세션까지, 터미널·에디터·Codex 앱이면 그 앱까지
 - 펫을 드래그해 원하는 위치에 두면 재시작해도 유지된다
 - 펫 자산은 Codex 포맷(v1 8열×9행, v2 8열×11행)을 그대로 읽는다. 버전은 `pet.json` 의 `spriteVersionNumber` 로 정한다(생략 시 v1). [codex-pets.net](https://codex-pets.net) 의 펫을 `claude-pet add <id>` 로 설치한다
 
@@ -12,7 +13,7 @@ Anthropic 공식 프로젝트가 아니다. 개인이 만든 비공식 도구다
 ## 요구 사항
 
 - macOS 14 (Sonoma) 이상
-- Claude Code
+- Claude Code, Codex, 또는 둘 다
 - Command Line Tools (아래 참고)
 
 Xcode 는 필요 없다. 용량이 큰 Xcode 대신 Command Line Tools 만 있으면 된다.
@@ -79,9 +80,11 @@ open /Applications/ClaudePet.app
 
 1. `dist/ClaudePet.app` 을 `/Applications` 로 복사
 2. 쓸 수 있는 `bin` 디렉터리에 `claude-pet` CLI 링크 생성
-3. `~/.claude/settings.json` 에 펫 훅 추가
+3. `~/.claude/settings.json` 에 펫 훅 추가. `~/.codex` 디렉터리가 있으면 `~/.codex/hooks.json` 에도 추가
 
-훅은 ` # claude-pet` 표식이 붙은 항목으로만 들어가고, 손대기 전에 설정 파일 백업을 남긴다. 되돌리려면 `claude-pet uninstall-hooks` 를 쓴다. 이때도 백업을 남긴다.
+훅은 ` # claude-pet` 표식이 붙은 항목으로만 들어가고, 손대기 전에 설정 파일 백업을 남긴다. 되돌리려면 `claude-pet uninstall-hooks` 를 쓴다. 이때도 백업을 남긴다. 나중에 Codex 를 깔았다면 `claude-pet install-hooks codex` 로 그쪽만 더할 수 있다.
+
+**Codex 는 한 단계가 더 있다.** Codex 는 사용자가 신뢰하지 않은 훅을 조용히 건너뛴다. 훅을 설치한 뒤 `codex` 를 열고 `/hooks` 에서 claude-pet 항목을 신뢰해야 펫이 반응한다. 신뢰는 훅 명령의 해시에 묶이므로 앱 경로가 바뀌면(예: 소스 빌드 → Homebrew) 다시 승인해야 한다. 승인 전에는 Codex 가 시작할 때 검토할 훅이 있다는 경고를 한 줄 띄운다.
 
 ## 명령
 
@@ -92,12 +95,14 @@ open /Applications/ClaudePet.app
 | `claude-pet list` | 설치된 펫 목록 |
 | `claude-pet status` | 훅 설치 여부와 살아 있는 세션 상태 |
 | `claude-pet login-item on\|off` | 로그인 시 자동 실행 |
-| `claude-pet install-hooks` | 훅 설치 |
-| `claude-pet uninstall-hooks` | 훅 제거 |
+| `claude-pet install-hooks [claude\|codex]` | 훅 설치. 인자가 없으면 Claude 와, `~/.codex` 가 있으면 Codex 도 |
+| `claude-pet uninstall-hooks [claude\|codex]` | 훅 제거. 대상 선택은 설치와 같다 |
 
 ## 동작 원리
 
-Claude Code 훅(`hooks/hook.sh`)이 이벤트마다 `~/Library/Application Support/ClaudePet/state/<session_id>.json` 을 쓰고, 앱이 그 디렉터리를 감시해 상태를 합성한다. 훅은 어떤 경우에도 `exit 0` 이고 stdout 에 아무것도 쓰지 않아서 Claude Code 동작에 끼어들지 않는다. 세션이 끝나면 상태 파일을 지운다.
+Claude Code 와 Codex 의 훅(`hooks/hook.sh`)이 이벤트마다 `~/Library/Application Support/ClaudePet/state/<session_id>.json` 을 쓰고, 앱이 그 디렉터리를 감시해 상태를 합성한다. 훅은 어떤 경우에도 `exit 0` 이고 stdout 에 아무것도 쓰지 않아서 에이전트 동작에 끼어들지 않는다. 세션이 끝나면 상태 파일을 지운다.
+
+두 에이전트의 훅은 설정 파일 모양과 stdin 필드(`session_id`, `cwd`, `hook_event_name`, `tool_name`)가 같아서 스크립트 하나를 같이 쓴다. Claude 는 `~/.claude/settings.json` 의 `hooks`, Codex 는 `~/.codex/hooks.json` 에 걸리고, Codex 쪽 명령에는 `--agent codex` 가 붙어 상태 파일의 `agent` 필드로 남는다. Codex 에는 `Notification`, `PostToolUseFailure`, `StopFailure` 이벤트가 없어서 Codex 세션은 "실패" 상태에 들어가지 않는다. 대신 사용자가 끊는 `Interrupt` 가 있고 이건 유휴로 간다. Codex 는 `SessionEnd` 와 `Interrupt` 훅을 최대 3초까지만 기다리므로 그 둘은 타임아웃 3초로 건다.
 
 펫을 누르면 상태 파일에 기록된 호스트를 보고 갈 곳을 정한다. Claude Desktop 세션은 환경변수 `CLAUDE_CODE_HOST_SESSION_ID` 가 있어서 `claude://code/continue?session=local_...` 딥링크로 그 세션까지 간다(앱이 받는 형식은 `^local_[A-Za-z0-9-]{1,64}$` 뿐이라 Claude Code 쪽 세션 UUID 를 넣으면 거절당한다). 그 밖의 호스트는 훅이 조상 프로세스에서 찾아 둔 `.app` 번들과 pid 로 그 앱을 앞으로 가져온다.
 

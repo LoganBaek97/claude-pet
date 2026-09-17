@@ -6,8 +6,10 @@ public enum OpenPlan: Equatable {
     case deepLink(URL)
     /// 그 외 호스트(터미널, 에디터). 살아 있는 pid 면 그 인스턴스를, 아니면 번들을 연다.
     case activate(pid: Int32?, bundlePath: String)
-    /// 단서가 없으면 예전처럼 Claude Desktop 을 연다.
+    /// 단서가 없으면 예전처럼 Claude Desktop 을 연다. Claude 세션만.
     case claudeDesktop
+    /// 단서가 없고 Claude 세션도 아니면 아무것도 하지 않는다.
+    case stay
 }
 
 public enum SessionOpenPlanner {
@@ -24,6 +26,6 @@ public enum SessionOpenPlanner {
             return .activate(pid: pid, bundlePath: app)
         }
 
-        return .claudeDesktop
+        return session.agent == .claude ? .claudeDesktop : .stay
     }
 }

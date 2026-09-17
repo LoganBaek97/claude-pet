@@ -4,7 +4,16 @@ import ServiceManagement
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     /// F-12: 훅 미설치 경고 문구. 시트 로드 실패 경고와 겹치면 시트 경고가 우선한다(warning 이 이미 있으면 덮지 않음).
-    static let hooksMissingWarning = "Claude Code 훅이 설치되지 않았습니다"
+    /// 앞에 빠진 에이전트 이름이 붙는다. 예: "Claude Code·Codex 훅이 설치되지 않았습니다".
+    static let hooksMissingSuffix = " 훅이 설치되지 않았습니다"
+    static func hooksMissingWarning(_ agents: [Agent]) -> String {
+        agents.map(\.displayName).joined(separator: "·") + hooksMissingSuffix
+    }
+
+    /// 이 컴퓨터에서 쓰는 에이전트 중 훅이 빠진 것.
+    var missingHookAgents: [Agent] {
+        Agent.installTargets().filter { !HooksInstaller.isInstalled(file: $0.settingsFile) }
+    }
 
     let prefs = Preferences.shared
     let executable = Bundle.main.executableURL ?? URL(fileURLWithPath: CommandLine.arguments[0])
@@ -38,7 +47,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         container.addSubview(controller.view)
         container.addSubview(controller.bubble)
         controller.onLayoutChange = { [weak self] in self?.layout() }
-        controller.onOpenFailed = { [weak self] in self?.warning = "Claude Desktop 을 찾지 못했습니다" }
+        controller.onOpenFailed = { [weak self] in self?.warning = "세션이 돌고 있는 앱을 찾지 못했습니다" }
         controller.view.onDragEnd = { [weak self] in
             guard let self else { return }
             self.prefs.position = self.panel.frame.origin
@@ -79,19 +88,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.loadSelectedPet(); self.layout()
         }
         promptForHooksIfNeeded()
-        if warning == nil && !hooksInstalled { warning = Self.hooksMissingWarning }
+        let missing = missingHookAgents
+        if warning == nil && !missing.isEmpty { warning = Self.hooksMissingWarning(missing) }
     }
 
     /// 첫 실행에 훅 설치를 권한다. 자동화된 실행에서는 CLAUDE_PET_SKIP_FIRST_RUN=1 로 건너뛴다.
     func promptForHooksIfNeeded() {
         guard ProcessInfo.processInfo.environment["CLAUDE_PET_SKIP_FIRST_RUN"] != "1" else { return }
-        guard !hooksInstalled else { return }
+        let missing = missingHookAgents
+        guard !missing.isEmpty else { return }
         let a = NSAlert()
-        a.messageText = "Claude Code 훅을 설치할까요?"
-        a.informativeText = "~/.claude/settings.json 에 펫 훅을 추가합니다. 기존 설정은 백업 후 보존됩니다."
+        a.messageText = "\(missing.map(\.displayName).joined(separator: "·")) 훅을 설치할까요?"
+        let files = missing.map { "~/" + $0.settingsFile.path.replacingOccurrences(of: Paths.home.path + "/", with: "") }
+        a.informativeText = "\(files.joined(separator: ", ")) 에 펫 훅을 추가합니다. 기존 설정은 백업 후 보존됩니다."
         a.addButton(withTitle: "설치"); a.addButton(withTitle: "나중에")
         NSApp.activate(ignoringOtherApps: true)
-        if a.runModal() == .alertFirstButtonReturn { installHooks() }
+        if a.runModal() == .alertFirstButtonReturn { installHooks(agents: missing) }
     }
 
     func availablePets() -> [InstalledPet] {
@@ -118,7 +130,9 @@ extension AppDelegate: StatusMenuDelegate {
     var currentPetId: String? { controller.pet?.id }
     var scale: Double { prefs.scale }
     var isLoginItemEnabled: Bool { SMAppService.mainApp.status == .enabled }
-    var hooksInstalled: Bool { HooksInstaller.isInstalled(file: Paths.claudeSettingsFile) }
+    var hookStatus: [(agent: Agent, installed: Bool)] {
+        Agent.installTargets().map { ($0, HooksInstaller.isInstalled(file: $0.settingsFile)) }
+    }
 
     func toggleVisible() {
         if panel.isVisible {
@@ -154,15 +168,27 @@ extension AppDelegate: StatusMenuDelegate {
         }
     }
 
-    func installHooks() {
-        do {
-            let backup = try HooksInstaller.installFile(at: Paths.claudeSettingsFile,
-                                                        hookScript: BundleLayout.hookScript(executable: executable), now: Date())
-            if warning == Self.hooksMissingWarning { warning = nil }
-            alert("훅을 설치했습니다", "백업: \(backup.path)\n\n새로 시작하는 Claude 세션부터 펫이 반응합니다.")
-        } catch {
-            alert("훅 설치 실패", "\(error)")
+    func installHooks(agent: Agent) { installHooks(agents: [agent]) }
+
+    func installHooks(agents: [Agent]) {
+        var lines: [String] = []
+        for agent in agents {
+            do {
+                let backup = try HooksInstaller.installFile(at: agent.settingsFile, hookScript: BundleLayout.hookScript(executable: executable), agent: agent, now: Date())
+                lines.append("\(agent.displayName) 백업: \(backup.path)")
+                if let note = agent.postInstallNote { lines.append(note) }
+            } catch {
+                alert("\(agent.displayName) 훅 설치 실패", "\(error)")
+                return
+            }
         }
+        // 빠진 에이전트가 남아 있으면 경고 문구를 그쪽으로 좁히고, 다 채워졌으면 지운다.
+        if warning?.hasSuffix(Self.hooksMissingSuffix) == true {
+            let still = missingHookAgents
+            warning = still.isEmpty ? nil : Self.hooksMissingWarning(still)
+        }
+        let names = agents.map(\.displayName).joined(separator: "·")
+        alert("훅을 설치했습니다", lines.joined(separator: "\n") + "\n\n새로 시작하는 \(names) 세션부터 펫이 반응합니다.")
     }
 
     func downloadDefaultPet() {

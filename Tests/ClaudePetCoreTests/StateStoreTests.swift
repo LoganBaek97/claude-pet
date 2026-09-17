@@ -66,3 +66,26 @@ final class StateStoreTests: XCTestCase {
         XCTAssertEqual(names, ["new.json"])
     }
 }
+
+// MARK: agent 필드
+
+extension StateStoreTests {
+    /// 예전 훅이 쓴 파일에는 agent 가 없다. Claude 로 읽는다.
+    func testFileWithoutAgentIsClaude() throws {
+        try write("a.json", #"{"session_id":"a","state":"running","event":"PreToolUse","tool":"Bash","cwd":"/p/a","ts":100}"#)
+        XCTAssertEqual(StateStore(directory: dir).loadAll().first?.agent, .claude)
+    }
+
+    func testFileWithCodexAgent() throws {
+        try write("a.json", #"{"session_id":"a","state":"running","event":"PreToolUse","tool":"shell","cwd":"/p/a","agent":"codex","ts":100}"#)
+        XCTAssertEqual(StateStore(directory: dir).loadAll().first?.agent, .codex)
+    }
+
+    /// 모르는 에이전트 문자열이어도 파일을 버리지 않고 Claude 로 취급한다.
+    func testUnknownAgentFallsBackToClaude() throws {
+        try write("a.json", #"{"session_id":"a","state":"running","event":"PreToolUse","tool":"x","cwd":"/p/a","agent":"gemini","ts":100}"#)
+        let loaded = StateStore(directory: dir).loadAll()
+        XCTAssertEqual(loaded.count, 1)
+        XCTAssertEqual(loaded.first?.agent, .claude)
+    }
+}
