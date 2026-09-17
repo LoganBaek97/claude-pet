@@ -15,10 +15,10 @@ private extension BubbleEmphasis {
     var borderWidth: CGFloat { self == .none ? 0 : 1.5 }
 }
 
-/// 펫 위에 붙는 캡슐형 라벨. 텍스트가 바뀔 때만 다시 그리고, running 은 3초 뒤 흐려진다.
+/// 펫 위에 붙는 캡슐형 라벨. 텍스트가 바뀔 때만 다시 그린다.
+/// 펫 애니메이션이 몇 초 뒤 idle 로 가라앉으므로 지속 상태는 이 텍스트가 나른다. 그래서 running 중에도 흐리게 하지 않는다.
 final class SpeechBubbleView: NSView {
     private let label = NSTextField(labelWithString: "")
-    private var dimTimer: Timer?
     private var currentText: String?
 
     override init(frame: NSRect) {
@@ -36,12 +36,10 @@ final class SpeechBubbleView: NSView {
     required init?(coder: NSCoder) { fatalError() }
 
     /// 반환값: 새 크기(숨김이면 .zero). 호출자가 패널 크기를 맞춘다.
-    /// F-8: 텍스트가 실제로 바뀔 때만 dimTimer 를 재시작한다(훅 이벤트마다 같은 텍스트로 다시 불려도 카운트다운이 리셋되지 않게).
-    /// 강조(waiting/failed)는 항상 alpha 1 을 유지하고, 단계별 색으로 글자와 테두리를 칠한다.
+    /// 강조(waiting/failed)는 단계별 색으로 글자와 테두리를 칠한다.
     @discardableResult
     func update(text: String?, emphasis: BubbleEmphasis, maxWidth: CGFloat) -> NSSize {
         guard let text, !text.isEmpty else {
-            dimTimer?.invalidate(); dimTimer = nil
             isHidden = true; currentText = nil; return .zero
         }
         let textChanged = text != currentText
@@ -60,16 +58,6 @@ final class SpeechBubbleView: NSView {
         layer?.borderColor = emphasis.foreground.withAlphaComponent(0.9).cgColor
         layer?.borderWidth = emphasis.borderWidth
         label.textColor = emphasis.foreground
-        if emphasized {
-            dimTimer?.invalidate(); dimTimer = nil
-            alphaValue = 1
-        } else if textChanged {
-            dimTimer?.invalidate()
-            alphaValue = 1
-            dimTimer = Timer.scheduledTimer(withTimeInterval: 3, repeats: false) { [weak self] _ in
-                self?.animator().alphaValue = 0.5
-            }
-        }
         return frame.size
     }
 }
