@@ -5,9 +5,13 @@ final class PetLayerView: NSView {
     var onClick: (() -> Void)?
     var onRightClick: ((NSEvent) -> Void)?
     var onDragEnd: (() -> Void)?
+    /// 끌려가는 동안 방금 움직인 양을 알린다. 누적이 아니라 직전 이벤트로부터의 차이다.
+    /// 되돌아올 때도 펫이 따라 돌아서야 해서 순간 방향이 필요하다.
+    var onDragMove: ((Double, Double) -> Void)?
 
     private var dragStart: NSPoint?
     private var windowStart: NSPoint?
+    private var lastPoint: NSPoint?
     private var moved = false
 
     override init(frame: NSRect) {
@@ -28,6 +32,7 @@ final class PetLayerView: NSView {
     override func mouseDown(with event: NSEvent) {
         dragStart = NSEvent.mouseLocation
         windowStart = window?.frame.origin
+        lastPoint = NSEvent.mouseLocation
         moved = false
     }
 
@@ -36,11 +41,15 @@ final class PetLayerView: NSView {
         let now = NSEvent.mouseLocation
         let dx = now.x - start.x, dy = now.y - start.y
         if abs(dx) > 4 || abs(dy) > 4 { moved = true }
-        if moved { window.setFrameOrigin(NSPoint(x: origin.x + dx, y: origin.y + dy)) }
+        guard moved else { return }
+        window.setFrameOrigin(NSPoint(x: origin.x + dx, y: origin.y + dy))
+        let previous = lastPoint ?? now
+        lastPoint = now
+        onDragMove?(Double(now.x - previous.x), Double(now.y - previous.y))
     }
 
     override func mouseUp(with event: NSEvent) {
-        defer { dragStart = nil; windowStart = nil }
+        defer { dragStart = nil; windowStart = nil; lastPoint = nil }
         if moved { onDragEnd?() } else { onClick?() }
     }
 

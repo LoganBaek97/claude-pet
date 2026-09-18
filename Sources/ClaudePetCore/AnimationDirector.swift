@@ -24,13 +24,15 @@ public final class AnimationDirector {
     private var state: PetState = .idle
     private var baseRow: SpriteRow = .idle
     private var oneShots: [SpriteRow] = []
+    /// 사용자가 펫을 끌고 있는 동안 붙잡아 두는 행. 있으면 상태 행도 일회성 연출도 제친다.
+    private var held: SpriteRow?
     private var index = 0
     private var playsDone = 0
     private var msSinceWalkCheck = 0
 
     /// 시스템 감속 모션. 켜면 상태 행의 첫 프레임 한 장만 보이고 넘어가지 않는다. 일회성 연출도 받지 않는다.
     public var reducedMotion = false {
-        didSet { if reducedMotion { oneShots = []; index = 0 } }
+        didSet { if reducedMotion { oneShots = []; held = nil; index = 0 } }
     }
 
     public init(frameCounts: [SpriteRow: Int], random: @escaping () -> Double = { Double.random(in: 0..<1) }) {
@@ -44,13 +46,15 @@ public final class AnimationDirector {
     public var currentDurationMs: Int {
         let row = activeRow
         let ms = row.frameDurationMs(index: index, of: count(row))
-        return oneShots.isEmpty && isSettled ? ms * Self.settledIdleSlowdown : ms
+        // 붙잡힌 행은 손을 따라와야 하니 느려지지 않는다.
+        return held == nil && oneShots.isEmpty && isSettled ? ms * Self.settledIdleSlowdown : ms
     }
 
     private var isSettled: Bool { state == .idle || playsDone >= Self.burstPlays }
 
     private var activeRow: SpriteRow {
         if reducedMotion { return baseRow }
+        if let held { return held }
         return oneShots.first ?? (isSettled ? .idle : baseRow)
     }
 
@@ -64,11 +68,26 @@ public final class AnimationDirector {
         playsDone = 0
         msSinceWalkCheck = 0
         if reducedMotion { index = 0; return }
+        if held != nil { return }   // 놓을 때 새 상태로 간다
         if previous == .waiting && newState == .running {
             playOnce(.jumping)
         } else if oneShots.isEmpty {
             index = 0
         }
+    }
+
+    /// 드래그처럼 사용자가 잡고 있는 동안 계속 보여 줄 행. nil 을 주면 평소 흐름으로 돌아간다.
+    ///
+    /// 반환값은 실제로 바뀌었는지다. 드래그 이벤트는 초당 수십 번 오는데 그때마다 호출자가
+    /// 프레임 타이머를 다시 걸면 120ms 가 지나기 전에 계속 초기화되어 그림이 멈춘다.
+    /// 바뀐 경우에만 다시 걸라는 뜻으로 알려 준다.
+    @discardableResult
+    public func hold(_ row: SpriteRow?) -> Bool {
+        guard !reducedMotion else { return false }
+        guard row != held else { return false }
+        held = row
+        index = 0
+        return true
     }
 
     public func playOnce(_ row: SpriteRow) {
@@ -80,6 +99,11 @@ public final class AnimationDirector {
 
     public func advance() -> AnimationFrame {
         guard !reducedMotion else { return current }
+        // 붙잡힌 행은 끝나지 않고 계속 돈다. 재생 횟수를 세지도, 산책을 끼우지도 않는다.
+        if let held {
+            index = (index + 1) % count(held)
+            return current
+        }
         msSinceWalkCheck += currentDurationMs
         let row = activeRow
         let next = index + 1

@@ -12,6 +12,10 @@ final class PetController {
     private(set) var sheet: SpriteSheet?
     private var director = AnimationDirector(frameCounts: [:])
     private var timer: Timer?
+    /// 드래그가 멈춘 것을 알아채는 타이머. 손을 멈추면 이벤트가 아예 오지 않아서,
+    /// 마지막 움직임 뒤로 이만큼 조용하면 달리기를 멈춘다.
+    private var dragIdle: Timer?
+    private static let dragIdleSeconds = 0.14
     private var isRunning = false
     private var observers: [NSObjectProtocol] = []
     private(set) var aggregate: Aggregate = .empty
@@ -29,6 +33,7 @@ final class PetController {
 
     init() {
         view.onClick = { [weak self] in self?.handleClick() }
+        view.onDragMove = { [weak self] dx, dy in self?.dragMoved(dx: dx, dy: dy) }
         stack.onSelect = { [weak self] summary in self?.open(summary) }
         stack.onHeightChange = { [weak self] in self?.onLayoutChange?() }
         applyReducedMotion()
@@ -76,6 +81,8 @@ final class PetController {
         isRunning = false
         timer?.invalidate()
         timer = nil
+        dragIdle?.invalidate()
+        dragIdle = nil
         stack.stopClock()
     }
 
@@ -113,6 +120,38 @@ final class PetController {
 
     func handleClick() {
         if !SessionOpener.open(aggregate) { onOpenFailed?() }
+    }
+
+    // MARK: 끌고 다니기
+
+    /// 끌려가는 방향으로 달리거나 뛴다. 손이 멈추면 평소 상태로 돌아간다.
+    private func dragMoved(dx: Double, dy: Double) {
+        // 방향이 바뀐 경우에만 다시 그린다. 드래그 이벤트마다 타이머를 다시 걸면
+        // 프레임 길이(120ms)가 지나기 전에 초기화되어 펫이 첫 장에 멈춰 버린다.
+        if director.hold(DragAnimation.row(dx: dx, dy: dy)) {
+            render(director.current)
+            scheduleNext()
+        }
+        dragIdle?.invalidate()
+        // 손을 멈추면 드래그 이벤트가 끊긴다. 마지막 움직임만 보고 계속 달리게 두지 않는다.
+        let t = Timer(timeInterval: Self.dragIdleSeconds, repeats: false) { [weak self] _ in
+            guard let self else { return }
+            if self.director.hold(nil) {
+                self.render(self.director.current)
+                self.scheduleNext()
+            }
+        }
+        dragIdle = t
+        RunLoop.main.add(t, forMode: .common)
+    }
+
+    /// 손을 뗐다. 붙잡은 행을 놓고 새 자리에 선 인사로 손을 한 번 흔든다.
+    func dragEnded() {
+        dragIdle?.invalidate(); dragIdle = nil
+        director.hold(nil)
+        director.playOnce(.waving)
+        render(director.current)
+        scheduleNext()
     }
 
     /// 카드를 누르면 그 세션 하나만 담은 합성으로 연다. 펫 클릭이 대표 세션을 여는 것과 같은 길이다.

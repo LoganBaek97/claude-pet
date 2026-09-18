@@ -284,13 +284,24 @@ final class SessionBubbleView: NSView {
 
     // MARK: 숨쉬는 점
 
+    /// 작업 중인 세션의 점이 천천히 숨 쉰다.
+    ///
+    /// 이미 돌고 있으면 건드리지 않는 게 핵심이다. 말풍선은 경과 시간 때문에 1초마다 갱신되는데,
+    /// 그때마다 애니메이션을 새로 달면 0.9초짜리 fade-out 이 끝나기도 전에 1.0 으로 되돌아간다.
+    /// 흐려지다 툭 끊기는 것처럼 보이고 밝아지는 쪽은 아예 보이지 않는다.
     private func applyPulse() {
         let key = "petPulse"
-        dot.layer?.removeAnimation(forKey: key)
-        guard isRunning, !reducedMotion else {
-            dot.layer?.opacity = 1
+        guard let layer = dot.layer else { return }
+        let shouldPulse = isRunning && !reducedMotion
+        let isPulsing = layer.animation(forKey: key) != nil
+        guard shouldPulse != isPulsing else { return }
+
+        guard shouldPulse else {
+            layer.removeAnimation(forKey: key)
+            layer.opacity = 1
             return
         }
+        // 한 번 흐려졌다 밝아지는 데 1.8초. 절반씩 끝을 부드럽게 해서 방향이 바뀌는 자리가 튀지 않는다.
         let a = CABasicAnimation(keyPath: "opacity")
         a.fromValue = 1.0
         a.toValue = 0.35
@@ -298,6 +309,6 @@ final class SessionBubbleView: NSView {
         a.autoreverses = true
         a.repeatCount = .infinity
         a.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-        dot.layer?.add(a, forKey: key)
+        layer.add(a, forKey: key)
     }
 }

@@ -124,6 +124,11 @@ Codex는 관리되지 않는 훅을 사용자가 `/hooks`에서 신뢰하기 전
 
 - 앱 시작, 펫 교체: waving 한 사이클 후 합성 상태로.
 - waiting → running 전이: jumping 한 사이클 후 running.
+- 드래그 놓음: waving 한 사이클 후 합성 상태로.
+
+붙잡는 행(드래그):
+
+끌려가는 동안에는 상태 행과 일회성 연출을 모두 제치고 방향에 맞는 행을 계속 돌린다. 가로로 더 움직이면 run-right/run-left, 세로로 더 움직이면 jumping(시트에 떨어지는 행이 없어 위아래를 하나로 묶는다). 손이 멈추면(0.14초간 이벤트 없음) 놓고 평소 상태로 돌아간다. 방향 판단은 누적 거리가 아니라 직전 이벤트로부터의 이동량으로 한다. 되돌아올 때 펫도 따라 돌아서야 하기 때문이다.
 
 프레임 속도 10fps. 행별 프레임 수는 Codex 규약(idle 6, running-right 8, running-left 8, waving 4, jumping 5, failed 8, waiting 6, running 6, review 6)을 기본으로 하되, 시트를 로드할 때 각 행에서 완전 투명한 셀은 빈 프레임으로 제외한다.
 

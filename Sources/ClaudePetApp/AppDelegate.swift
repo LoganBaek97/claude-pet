@@ -97,6 +97,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         controller.view.onDragEnd = { [weak self] in
             guard let self else { return }
             self.prefs.position = self.panel.frame.origin
+            self.controller.dragEnded()
             // 옮긴 자리 위에 남은 화면 높이가 달라졌다. 들어갈 만큼으로 카드 수를 다시 잡는다.
             self.layout()
         }
