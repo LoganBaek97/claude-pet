@@ -123,14 +123,16 @@ case "status":
         print("\(agent.displayName) 훅: \(installed ? "설치됨" : "미설치") (\(agent.settingsFile.path))\(unused)")
     }
     let now = Date()
-    let sessions = StateStore(directory: Paths.stateDirectory).loadAll()
-        .filter { now.timeIntervalSince($0.timestamp) <= StateAggregator.deadAfter }
-        .sorted { $0.ts > $1.ts }
-    let agg = StateAggregator.aggregate(sessions, now: now)
+    let probe = ProcessProbe()
+    let agg = StateAggregator.aggregate(StateStore(directory: Paths.stateDirectory).loadAll(),
+                                        now: now, liveness: probe.liveness(of:))
     print("합성 상태: \(agg.state.rawValue)  (살아 있는 세션 \(agg.liveSessionCount), 대기 \(agg.waitingCount))")
-    for s in sessions {
+    for summary in agg.sessions {
+        let s = summary.session
         let age = Int(now.timeIntervalSince(s.timestamp))
-        print("  \(s.agent.rawValue.padding(toLength: 7, withPad: " ", startingAt: 0)) \(s.state.rawValue.padding(toLength: 8, withPad: " ", startingAt: 0)) \(s.projectName.padding(toLength: 24, withPad: " ", startingAt: 0)) \(s.tool.padding(toLength: 10, withPad: " ", startingAt: 0)) \(age)s 전  \(s.sessionId)")
+        // 프로세스를 확인해 살아 있다고 본 세션인지 표시한다. 오래 조용한 세션이 왜 남아 있는지 알 수 있다.
+        let how = probe.liveness(of: s) == .alive ? "프로세스 확인" : "최근 신호"
+        print("  \(s.agent.rawValue.padding(toLength: 7, withPad: " ", startingAt: 0)) \(summary.state.rawValue.padding(toLength: 8, withPad: " ", startingAt: 0)) \(s.projectName.padding(toLength: 24, withPad: " ", startingAt: 0)) \(s.tool.padding(toLength: 10, withPad: " ", startingAt: 0)) \(age)s 전  \(how)  \(s.sessionId)")
     }
 
 case "help", "-h", "--help":

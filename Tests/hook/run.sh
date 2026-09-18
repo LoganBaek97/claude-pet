@@ -30,6 +30,9 @@ assert_eq "event" PreToolUse "$(field "$f" event)"
 assert_eq "tool" Bash "$(field "$f" tool)"
 assert_eq "cwd first match" /Users/x/proj "$(field "$f" cwd)"
 assert_eq "transcript path" /Users/x/.claude/projects/p/sess-1.jsonl "$(field "$f" transcript)"
+# agent_pid: 앱이 이걸로 세션 프로세스의 생사를 본다. 테스트를 어디서 돌리냐에 따라 값이
+# 달라지므로 숫자인지만 본다. 부모가 claude/codex 가 아니면 조상에서 찾고, 없으면 0 이다.
+assert_eq "agent_pid is a number" yes "$(is_number "$(number "$f" agent_pid)")"
 assert_eq "ts numeric" yes "$(grep -q '"ts":[0-9][0-9]*}' "$f" && echo yes || echo no)"
 assert_eq "host_session empty without env" "" "$(field "$f" host_session)"
 assert_eq "single line" 1 "$(wc -l < "$f" | tr -d ' ')"

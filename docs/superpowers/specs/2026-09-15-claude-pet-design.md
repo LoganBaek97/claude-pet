@@ -102,7 +102,7 @@ Codex는 관리되지 않는 훅을 사용자가 `/hooks`에서 신뢰하기 전
 입력: 상태 디렉터리의 모든 JSON. 출력: 표시할 상태 하나와 그 근거 세션.
 
 1. 파싱 실패 파일은 건너뛴다.
-2. `now - ts > 30분`인 파일은 죽은 세션으로 보고 무시한다. `> 24시간`이면 삭제한다.
+2. `agent_pid`로 세션 프로세스를 확인한다. 살아 있으면 아무리 조용해도 남기고, 없으면 바로 뺀다. pid는 돌려 쓰이므로 커널의 짧은 이름(`p_comm`)과 실행 파일 경로 조각으로 정말 claude/codex인지 본다. CLI로 깐 Claude Code는 실행 파일 이름이 버전 번호(`~/.local/share/claude/versions/2.1.274`)라서 마지막 조각만 보면 놓친다. pid가 없는 옛 파일은 `now - ts > 30분`이면 죽은 세션으로 본다. `> 24시간`이면 파일을 삭제한다.
 3. `failed`, `review`는 `now - ts > 10분`이면 idle로 취급한다. `running`은 `now - ts > 5분`이면 idle로 취급한다.
 4. 남은 것 중 우선순위 `waiting > failed > running > review > idle`로 고른다. 같은 순위면 `ts`가 큰 것.
 5. 함께 반환: 선택된 세션 ID, tool, cwd, 그리고 waiting 상태인 세션 수.

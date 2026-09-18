@@ -10,6 +10,8 @@ final class StateWatcher {
     private var timer: Timer?
     private var last: Aggregate?
     private var refreshCount = 0
+    /// 세션 프로세스가 아직 있는지 본다. 훅 이벤트만 보면 몇 시간 조용한 세션이 사라진다.
+    private let probe = ProcessProbe()
 
     init(store: StateStore, onChange: @escaping (Aggregate) -> Void) {
         self.store = store
@@ -40,7 +42,7 @@ final class StateWatcher {
         let now = Date()
         refreshCount += 1
         if refreshCount % 60 == 0 { store.removeStale(olderThan: StateAggregator.deleteAfter, now: now) }
-        let agg = StateAggregator.aggregate(store.loadAll(), now: now)
+        let agg = StateAggregator.aggregate(store.loadAll(), now: now, liveness: probe.liveness(of:))
         if force || agg != last {
             last = agg
             onChange(agg)

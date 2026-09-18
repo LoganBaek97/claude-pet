@@ -29,6 +29,11 @@ public struct Aggregate: Equatable, Sendable {
     public static let empty = Aggregate(state: .idle, session: nil, waitingCount: 0, liveSessionCount: 0)
 }
 
+/// 세션 프로세스가 아직 있는지. `unknown` 은 옛 훅이 쓴 파일이라 pid 를 모르는 경우다.
+public enum SessionLiveness: Equatable, Sendable {
+    case alive, gone, unknown
+}
+
 public enum StateAggregator {
     public static let deadAfter: TimeInterval = 30 * 60
     public static let settleAfter: TimeInterval = 10 * 60
@@ -38,8 +43,19 @@ public enum StateAggregator {
 
     /// 죽은 세션을 거르고, failed/review/running 을 가라앉힌 뒤, 우선순위와 최신순으로 줄 세운다.
     /// 맨 앞이 펫이 따르는 상태이고, 줄 전체가 말풍선 순서다.
-    public static func aggregate(_ sessions: [SessionState], now: Date) -> Aggregate {
-        let live = sessions.filter { now.timeIntervalSince($0.timestamp) <= deadAfter }
+    ///
+    /// `liveness` 는 세션 프로세스가 아직 있는지 알려 준다. 살아 있으면 아무리 조용해도 남기고,
+    /// 없으면 바로 뺀다. 모르면(옛 훅이 쓴 파일) `deadAfter` 시효로 판단한다.
+    /// 훅 이벤트만 보면 몇 시간 조용한 세션이 사라져 버린다. 프로세스를 보는 쪽이 사실에 가깝다.
+    public static func aggregate(_ sessions: [SessionState], now: Date,
+                                 liveness: (SessionState) -> SessionLiveness = { _ in .unknown }) -> Aggregate {
+        let live = sessions.filter { session in
+            switch liveness(session) {
+            case .alive: return true
+            case .gone: return false
+            case .unknown: return now.timeIntervalSince(session.timestamp) <= deadAfter
+            }
+        }
         guard !live.isEmpty else { return .empty }
 
         func effective(_ s: SessionState) -> PetState {

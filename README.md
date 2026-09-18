@@ -103,7 +103,9 @@ open /Applications/ClaudePet.app
 
 ## 동작 원리
 
-Claude Code 와 Codex 의 훅(`hooks/hook.sh`)이 이벤트마다 `~/Library/Application Support/ClaudePet/state/<session_id>.json` 을 쓰고, 앱이 그 디렉터리를 감시해 상태를 합성한다. 훅은 어떤 경우에도 `exit 0` 이고 stdout 에 아무것도 쓰지 않아서 에이전트 동작에 끼어들지 않는다. 세션이 끝나면 상태 파일을 지운다.
+Claude Code 와 Codex 의 훅(`hooks/hook.sh`)이 이벤트마다 `~/Library/Application Support/ClaudePet/state/<session_id>.json` 을 쓰고, 앱이 그 디렉터리를 감시해 상태를 합성한다.
+
+훅은 세션을 돌리는 claude/codex 프로세스의 pid 도 함께 적는다(`agent_pid`). 앱이 그 pid 로 생사를 확인해서, 몇 시간 조용한 세션도 프로세스가 살아 있으면 계속 보여 주고 프로세스가 사라졌으면 바로 지운다. 이게 없으면 훅 이벤트만 보게 되어 30분간 아무 일도 없던 세션이 죽은 것으로 취급된다. pid 는 돌려 쓰이므로 번호만 믿지 않고 그 프로세스가 정말 claude/codex 인지도 확인한다. 훅은 어떤 경우에도 `exit 0` 이고 stdout 에 아무것도 쓰지 않아서 에이전트 동작에 끼어들지 않는다. 세션이 끝나면 상태 파일을 지운다.
 
 두 에이전트의 훅은 설정 파일 모양과 stdin 필드(`session_id`, `cwd`, `hook_event_name`, `tool_name`)가 같아서 스크립트 하나를 같이 쓴다. Claude 는 `~/.claude/settings.json` 의 `hooks`, Codex 는 `~/.codex/hooks.json` 에 걸리고, Codex 쪽 명령에는 `--agent codex` 가 붙어 상태 파일의 `agent` 필드로 남는다. Codex 에는 `Notification`, `PostToolUseFailure`, `StopFailure` 이벤트가 없어서 Codex 세션은 "실패" 상태에 들어가지 않는다. 대신 사용자가 끊는 `Interrupt` 가 있고 이건 유휴로 간다. Codex 는 `SessionEnd` 와 `Interrupt` 훅을 최대 3초까지만 기다리므로 그 둘은 타임아웃 3초로 건다.
 
