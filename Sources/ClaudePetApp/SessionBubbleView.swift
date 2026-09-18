@@ -15,6 +15,12 @@ extension PetState {
     }
 }
 
+/// 패널이 nonactivating 이라 키 윈도우가 될 수 없어서 모든 클릭이 first mouse 다.
+/// NSButton 은 기본적으로 first mouse 를 받지 않아 그대로 두면 닫기 버튼이 첫 클릭을 삼킨다.
+final class FirstMouseButton: NSButton {
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+}
+
 /// 세션 하나를 나르는 카드. 재질 배경 위에 상태 점, 제목, 부제를 얹는다.
 /// 크기는 스스로 정하고(`fittingSize`), 어디에 놓을지는 `BubbleStackView` 가 정한다.
 final class SessionBubbleView: NSView {
@@ -27,9 +33,12 @@ final class SessionBubbleView: NSView {
     private static let hoveredBorder = NSColor.labelColor.withAlphaComponent(0.28)
     /// 유휴 세션은 한 발 물러나 보이게 한다. 펼쳤을 때 급한 카드와 같은 무게로 읽히면 안 된다.
     private static let idleAlpha: CGFloat = 0.62
+    private static let closeSize: CGFloat = 16
 
     let sessionId: String
     var onClick: (() -> Void)?
+    /// 닫기 버튼. 그 세션의 말풍선을 지금 상태에 한해 치운다.
+    var onClose: (() -> Void)?
     /// 끄면 클릭도 호버도 받지 않는다. 겹쳐 쌓았을 때 뒤에 깔린 카드가 이렇다.
     var isInteractive = true {
         didSet { if !isInteractive, isHovered { setHovered(false) } }
@@ -43,7 +52,13 @@ final class SessionBubbleView: NSView {
             dot.isHidden = !showsContent
             titleLabel.isHidden = !showsContent
             detailLabel.isHidden = !showsContent
-            if !showsContent { badge.isHidden = true } else { needsLayout = true }
+            if !showsContent {
+                badge.isHidden = true
+                closeButton.isHidden = true
+                closeButton.alphaValue = 0
+            } else {
+                needsLayout = true
+            }
         }
     }
 
@@ -52,6 +67,7 @@ final class SessionBubbleView: NSView {
     private let titleLabel = NSTextField(labelWithString: "")
     private let detailLabel = NSTextField(labelWithString: "")
     private let badge = NSTextField(labelWithString: "")
+    private let closeButton = FirstMouseButton()
     private var tracking: NSTrackingArea?
     private var isHovered = false
 
@@ -106,7 +122,23 @@ final class SessionBubbleView: NSView {
         badge.alignment = .center
         badge.isHidden = true
         addSubview(badge)
+
+        // macOS 알림처럼 좌상단 모서리에 걸친다. 마우스를 올렸을 때만 보인다.
+        closeButton.bezelStyle = .circular
+        closeButton.isBordered = false
+        closeButton.image = NSImage(systemSymbolName: "xmark.circle.fill",
+                                    accessibilityDescription: "말풍선 닫기")
+        closeButton.imagePosition = .imageOnly
+        closeButton.contentTintColor = .secondaryLabelColor
+        closeButton.target = self
+        closeButton.action = #selector(closeClicked)
+        closeButton.alphaValue = 0
+        closeButton.isHidden = true
+        closeButton.toolTip = "이 말풍선 닫기"
+        addSubview(closeButton)
     }
+
+    @objc private func closeClicked() { onClose?() }
 
     required init?(coder: NSCoder) { fatalError() }
 
@@ -145,6 +177,8 @@ final class SessionBubbleView: NSView {
 
         let p = Self.padding
         dot.frame = NSRect(x: p, y: (bounds.height - Self.dotSize) / 2, width: Self.dotSize, height: Self.dotSize)
+        closeButton.frame = NSRect(x: 3, y: bounds.height - Self.closeSize - 3,
+                                   width: Self.closeSize, height: Self.closeSize)
 
         let textX = dot.frame.maxX + 9
         var titleWidth = bounds.width - textX - p
@@ -171,21 +205,28 @@ final class SessionBubbleView: NSView {
     override func mouseEntered(with event: NSEvent) { setHovered(isInteractive) }
     override func mouseExited(with event: NSEvent) { setHovered(false) }
 
-    private func setHovered(_ hovered: Bool) {
+    func setHovered(_ hovered: Bool) {
         guard hovered != isHovered else { return }
         isHovered = hovered
+        let showClose = hovered && showsContent
+        if showClose { closeButton.isHidden = false }
         let apply = {
             self.material.layer?.borderColor = (hovered ? Self.hoveredBorder : Self.restingBorder).cgColor
             self.layer?.shadowOpacity = hovered ? 0.28 : 0.18
             self.alphaValue = hovered ? 1 : self.restingAlpha
+            self.closeButton.alphaValue = showClose ? 1 : 0
         }
         if reducedMotion {
             apply()
+            closeButton.isHidden = !showClose
         } else {
             NSAnimationContext.runAnimationGroup { ctx in
                 ctx.duration = 0.16
                 ctx.allowsImplicitAnimation = true
                 apply()
+            } completionHandler: { [weak self] in
+                guard let self, !showClose else { return }
+                self.closeButton.isHidden = true
             }
         }
     }

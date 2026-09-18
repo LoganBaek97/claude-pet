@@ -73,11 +73,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                         width: width - pad * 2, height: max(stackHeight, 0))
     }
 
-    /// 마우스를 받아야 하는 영역: 펫과 지금 떠 있는 말풍선들. 그 바깥은 클릭이 밑으로 통과한다.
+    /// 마우스를 받아야 하는 영역: 펫과 말풍선, 그리고 그 사이. 바깥은 클릭이 밑으로 통과한다.
+    ///
+    /// 펫과 말풍선을 따로 주면 둘 사이 빈 칸을 지날 때 펼친 목록이 접힌다. 커서가 위아래로
+    /// 오가는 길을 끊지 않도록 둘을 감싸는 사각형 하나로 준다.
     func hitRects() -> [NSRect] {
-        var rects = [controller.view.convert(controller.view.bounds, to: nil)]
-        rects.append(contentsOf: controller.stack.visibleCardFrames)
-        return rects.map { panel.convertToScreen($0) }
+        let pet = controller.view.convert(controller.view.bounds, to: nil)
+        guard let bubbles = controller.stack.hoverBox else { return [panel.convertToScreen(pet)] }
+        return [panel.convertToScreen(pet.union(bubbles))]
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {

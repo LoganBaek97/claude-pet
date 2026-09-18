@@ -41,6 +41,10 @@ final class BubbleStackView: NSView {
     /// 사라지는 중인 카드. 애니메이션이 끝나기 전에 창이 줄어들면 재질(블러)이 잘린 채 화면에 남는다.
     /// 이게 비기 전까지 패널 높이를 줄이지 않는다.
     private var dismissing: Set<String> = []
+    /// 사용자가 닫은 말풍선. 세션 id -> 닫을 때의 상태.
+    /// 그 상태가 이어지는 동안만 감춘다. 상태가 달라지면 새로 알릴 일이 생긴 것이라 다시 뜬다.
+    /// 알림을 지우는 것과 같고, 세션 자체에는 아무 영향이 없다.
+    private var closed: [String: PetState] = [:]
 
     /// 켜면 아무것도 그리지 않는다. 메뉴의 "대화창 끄기" 가 이걸 쓴다.
     var isBubbleHidden = false
@@ -77,6 +81,7 @@ final class BubbleStackView: NSView {
 
     func apply(_ agg: Aggregate) {
         aggregate = agg
+        forgetClosedSessionsThatAreGone()
         rebuild()
     }
 
@@ -99,12 +104,26 @@ final class BubbleStackView: NSView {
 
     private func chosen() -> (shown: [SessionSummary], hidden: Int) {
         guard !isBubbleHidden else { return ([], 0) }
-        let live = aggregate.sessions
+        let live = aggregate.sessions.filter { closed[$0.session.sessionId] != $0.state }
         let pool = isExpanded ? live : live.filter { $0.state != .idle }
         let limit = min(isExpanded ? Self.expandedLimit : Self.collapsedLimit, max(maxCards, 1))
         let shown = Array(pool.prefix(limit))
-        // 접었을 때 숨긴 유휴 세션도 세어 준다. 호버하면 볼 수 있다는 힌트가 된다.
+        // 접었을 때 감춘 유휴 세션도 세어 준다. 호버하면 볼 수 있다는 힌트가 된다.
+        // 사용자가 닫은 것은 세지 않는다. 치우기로 한 것을 숫자로 다시 들이밀 이유가 없다.
         return (shown, live.count - shown.count)
+    }
+
+    /// 말풍선 하나를 치운다. 그 세션의 상태가 달라지기 전까지 다시 뜨지 않는다.
+    private func close(_ summary: SessionSummary) {
+        closed[summary.session.sessionId] = summary.state
+        rebuild()
+        onHeightChange?()
+    }
+
+    /// 죽어서 목록에서 빠진 세션의 기록은 들고 있을 이유가 없다.
+    private func forgetClosedSessionsThatAreGone() {
+        let liveIds = Set(aggregate.sessions.map(\.session.sessionId))
+        closed = closed.filter { liveIds.contains($0.key) }
     }
 
     /// 카드 한 장이 놓일 자리와 모양. 아래(펫에 가까운 쪽)가 가장 급한 세션이다.
@@ -151,18 +170,18 @@ final class BubbleStackView: NSView {
         return max(contentHeight, live)
     }
 
-    /// 지금 보이는 카드들의 창 좌표 사각형. 히트 영역 계산에 쓴다.
-    var visibleCardFrames: [NSRect] {
-        guard !visible.isEmpty else { return [] }
+    /// 지금 떠 있는 말풍선이 차지하는 영역 하나. 창 좌표로 돌려준다.
+    ///
+    /// 카드마다 따로 주면 카드 사이 6pt 틈에 커서가 들어갔을 때 어느 사각형에도 안 잡혀
+    /// 펼친 목록이 도로 접힌다. 그래서 틈까지 포함한 한 덩어리로 본다.
+    var hoverBox: NSRect? {
+        guard !visible.isEmpty else { return nil }
         let targets = slots(for: visible.count)
-        if isExpanded {
-            return targets.map { convert($0.frame, to: nil) }
-        }
-        // 접힌 더미는 눈에 보이는 만큼만 하나의 사각형으로 친다.
         let front = targets[0].frame
-        let box = NSRect(x: front.minX, y: front.minY,
-                         width: front.width, height: stackedHeight(visible.count))
-        return [convert(box, to: nil)]
+        var top = isExpanded ? (targets.last?.frame.maxY ?? front.maxY) : stackedHeight(visible.count)
+        if !overflow.isHidden { top = max(top, overflow.frame.maxY) }
+        let box = NSRect(x: front.minX, y: front.minY, width: front.width, height: top - front.minY)
+        return convert(box, to: nil)
     }
 
     // MARK: 다시 그리기
@@ -206,8 +225,9 @@ final class BubbleStackView: NSView {
             // 접었을 때 뒤 카드는 장식이다. 클릭도 글자도 맨 앞 카드만 갖는다.
             card.isInteractive = isExpanded || i == 0
             card.showsContent = isExpanded || i == 0
-            // 클릭 콜백은 최신 상태를 물고 있어야 한다(상태가 바뀌면 여는 곳도 달라진다).
+            // 콜백은 최신 상태를 물고 있어야 한다(상태가 바뀌면 여는 곳도, 닫는 기준도 달라진다).
             card.onClick = { [weak self] in self?.onSelect?(summary) }
+            card.onClose = { [weak self] in self?.close(summary) }
         }
 
         let hadOverflow = !overflow.isHidden
