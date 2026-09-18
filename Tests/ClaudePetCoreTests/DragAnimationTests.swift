@@ -145,3 +145,97 @@ extension AnimationDirectorHoldTests {
         XCTAssertFalse(d.hold(.runningRight))
     }
 }
+
+// MARK: 느린 드래그에서도 끊기지 않게 모아서 판단
+
+final class DragTrackerTests: XCTestCase {
+    /// 이벤트 하나가 문턱값보다 작아도 멈춘 것이 아니다. 계속 모아서 넘으면 그때 방향을 정한다.
+    /// 예전에는 작은 이벤트마다 "멈춤" 으로 보고 애니메이션을 내렸다 올려서 끊겨 보였다.
+    func testSlowDragAccumulatesUntilItDecides() {
+        var t = DragTracker()
+        XCTAssertNil(t.accumulate(dx: 0.4, dy: 0), "아직 모자라다")
+        XCTAssertNil(t.accumulate(dx: 0.4, dy: 0))
+        XCTAssertNil(t.accumulate(dx: 0.4, dy: 0))
+        XCTAssertNil(t.accumulate(dx: 0.4, dy: 0))
+        XCTAssertEqual(t.accumulate(dx: 0.4, dy: 0), .runningRight, "모인 값이 문턱을 넘었다")
+    }
+
+    /// 방향을 정하고 나면 다시 모으기 시작한다. 직전 것이 남아 판단을 흐리면 안 된다.
+    func testDecidingResetsTheAccumulator() {
+        var t = DragTracker()
+        XCTAssertEqual(t.accumulate(dx: 10, dy: 0), .runningRight)
+        XCTAssertNil(t.accumulate(dx: 0.5, dy: 0), "방금 컸다고 해서 다음이 공짜는 아니다")
+    }
+
+    /// 앞뒤로 흔들면 서로 지워진다. 제자리 떨림에 펫이 방향을 바꾸지 않는다.
+    func testJitterCancelsOut() {
+        var t = DragTracker()
+        XCTAssertNil(t.accumulate(dx: 1.4, dy: 0))
+        XCTAssertNil(t.accumulate(dx: -1.4, dy: 0))
+        XCTAssertNil(t.accumulate(dx: 1.0, dy: 0))
+    }
+
+    /// 방향이 진짜로 바뀌면 따라 돈다.
+    func testRealDirectionChangeIsFollowed() {
+        var t = DragTracker()
+        XCTAssertEqual(t.accumulate(dx: 10, dy: 0), .runningRight)
+        XCTAssertEqual(t.accumulate(dx: -10, dy: 0), .runningLeft)
+    }
+
+    func testVerticalAccumulationJumps() {
+        var t = DragTracker()
+        XCTAssertEqual(t.accumulate(dx: 0, dy: 10), .jumping)
+    }
+
+    /// 손을 멈추면 호출자가 초기화한다. 그 뒤로는 처음부터 다시 모은다.
+    func testResetClearsWhatWasGathered() {
+        var t = DragTracker()
+        XCTAssertNil(t.accumulate(dx: 1.5, dy: 0))
+        t.reset()
+        XCTAssertNil(t.accumulate(dx: 1.5, dy: 0), "초기화했으니 다시 모자라다")
+    }
+}
+
+// MARK: 축을 갈아탈 때만 여유를 둔다
+
+extension DragTrackerTests {
+    /// 45도 근처에서 달리기와 점프가 번갈아 뜨면 프레임이 계속 처음으로 돌아가 끊겨 보인다.
+    /// 이미 달리고 있으면 세로가 어지간히 커야 점프로 넘어간다.
+    func testNearDiagonalKeepsTheCurrentAxis() {
+        var t = DragTracker()
+        XCTAssertEqual(t.accumulate(dx: 10, dy: 0), .runningRight)
+        XCTAssertEqual(t.accumulate(dx: 5, dy: 6), .runningRight, "조금 더 세로라고 바로 점프하지 않는다")
+        XCTAssertEqual(t.accumulate(dx: 5, dy: 6), .runningRight)
+    }
+
+    /// 확실히 세로로 가면 넘어간다.
+    func testClearAxisChangeStillSwitches() {
+        var t = DragTracker()
+        XCTAssertEqual(t.accumulate(dx: 10, dy: 0), .runningRight)
+        XCTAssertEqual(t.accumulate(dx: 2, dy: 10), .jumping)
+    }
+
+    /// 점프 중이면 반대로 가로가 어지간히 커야 달리기로 넘어간다.
+    func testJumpingIsAlsoSticky() {
+        var t = DragTracker()
+        XCTAssertEqual(t.accumulate(dx: 0, dy: 10), .jumping)
+        XCTAssertEqual(t.accumulate(dx: 6, dy: 5), .jumping)
+        XCTAssertEqual(t.accumulate(dx: 10, dy: 2), .runningRight)
+    }
+
+    /// 좌우를 뒤집는 데는 여유를 두지 않는다. 돌아서는 건 바로 따라가야 한다.
+    func testTurningAroundIsImmediate() {
+        var t = DragTracker()
+        XCTAssertEqual(t.accumulate(dx: 10, dy: 0), .runningRight)
+        XCTAssertEqual(t.accumulate(dx: -3, dy: 0), .runningLeft)
+        XCTAssertEqual(t.accumulate(dx: 3, dy: 0), .runningRight)
+    }
+
+    /// 초기화하면 여유도 사라진다. 다음 드래그는 처음부터 판단한다.
+    func testResetForgetsTheStickyAxis() {
+        var t = DragTracker()
+        XCTAssertEqual(t.accumulate(dx: 10, dy: 0), .runningRight)
+        t.reset()
+        XCTAssertEqual(t.accumulate(dx: 3, dy: 4), .jumping, "여유가 없으면 더 큰 축을 따른다")
+    }
+}
