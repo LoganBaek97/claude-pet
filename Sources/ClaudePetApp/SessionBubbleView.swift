@@ -127,7 +127,8 @@ final class SessionBubbleView: NSView {
         closeButton.bezelStyle = .circular
         closeButton.isBordered = false
         closeButton.image = NSImage(systemSymbolName: "xmark.circle.fill",
-                                    accessibilityDescription: "말풍선 닫기")
+                                    accessibilityDescription: "말풍선 닫기")?
+            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 14, weight: .medium))
         closeButton.imagePosition = .imageOnly
         closeButton.contentTintColor = .secondaryLabelColor
         closeButton.target = self
@@ -177,19 +178,24 @@ final class SessionBubbleView: NSView {
 
         let p = Self.padding
         dot.frame = NSRect(x: p, y: (bounds.height - Self.dotSize) / 2, width: Self.dotSize, height: Self.dotSize)
-        closeButton.frame = NSRect(x: 3, y: bounds.height - Self.closeSize - 3,
+        // 치우는 버튼은 행 끝에 둔다. 자리는 호버 여부와 상관없이 늘 비워 두어 글자가 밀리지 않게 한다.
+        closeButton.frame = NSRect(x: bounds.width - p - Self.closeSize, y: (bounds.height - Self.closeSize) / 2,
                                    width: Self.closeSize, height: Self.closeSize)
 
         let textX = dot.frame.maxX + 9
-        var titleWidth = bounds.width - textX - p
+        let textWidth = max(0, closeButton.frame.minX - 8 - textX)
+
+        // 배지는 제목 바로 옆에 붙는다. 제목이 길면 제목이 먼저 줄고 배지는 자리를 지킨다.
+        titleLabel.sizeToFit()
+        var titleWidth = min(titleLabel.frame.width, textWidth)
         if !badge.isHidden {
             badge.sizeToFit()
-            let w = badge.frame.width + 4
-            badge.frame = NSRect(x: bounds.width - p - w, y: bounds.height / 2 + 2, width: w, height: 13)
-            titleWidth -= w + 6
+            let w = badge.frame.width + 8
+            titleWidth = min(titleWidth, max(0, textWidth - w - 6))
+            badge.frame = NSRect(x: textX + titleWidth + 6, y: bounds.height / 2 + 3, width: w, height: 13)
         }
-        titleLabel.frame = NSRect(x: textX, y: bounds.height / 2 + 1, width: max(0, titleWidth), height: 16)
-        detailLabel.frame = NSRect(x: textX, y: bounds.height / 2 - 16, width: bounds.width - textX - p, height: 14)
+        titleLabel.frame = NSRect(x: textX, y: bounds.height / 2 + 1, width: titleWidth, height: 16)
+        detailLabel.frame = NSRect(x: textX, y: bounds.height / 2 - 16, width: textWidth, height: 14)
     }
 
     // MARK: 호버와 클릭
