@@ -239,3 +239,29 @@ extension DragTrackerTests {
         XCTAssertEqual(t.accumulate(dx: 3, dy: 4), .jumping, "여유가 없으면 더 큰 축을 따른다")
     }
 }
+
+
+// MARK: 놓은 뒤 상태로 제대로 돌아오는가
+
+extension AnimationDirectorHoldTests {
+    /// 실제로 겪은 결함. 작업 중인 세션을 끌었다 놓으면 펫이 중립으로 남아 있었다.
+    /// 상태 행은 세 번 돌면 idle 로 가라앉는데, 놓을 때 그 횟수를 비우지 않아서
+    /// 이미 가라앉은 세션은 끌어도 다시 살아나지 않았다.
+    func testReleasingRestartsTheStateBurst() {
+        let d = director(.running)
+        while d.current.row == .running { _ = d.advance() }
+        XCTAssertEqual(d.current.row, .idle, "가라앉았다")
+
+        d.hold(.runningRight)
+        d.hold(nil)
+        XCTAssertEqual(d.current.row, .running, "놓았으면 작업 중인 걸 다시 보여 줘야 한다")
+    }
+
+    /// 붙잡는 것만으로 재생 횟수가 비면 안 된다. 놓을 때만 다시 시작한다.
+    func testHoldingDoesNotRestartTheBurstByItself() {
+        let d = director(.running)
+        while d.current.row == .running { _ = d.advance() }
+        d.hold(.runningRight)
+        XCTAssertEqual(d.current.row, .runningRight)
+    }
+}

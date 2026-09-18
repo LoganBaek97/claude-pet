@@ -87,6 +87,12 @@ public final class AnimationDirector {
         guard row != held else { return false }
         held = row
         index = 0
+        if row == nil {
+            // 놓을 때는 상태 행을 처음부터 다시 보여 준다. 재생 횟수를 그대로 두면 이미 가라앉은
+            // 세션은 끌었다 놓아도 중립인 채라, 작업 중인데도 아무 일 없는 것처럼 보인다.
+            playsDone = 0
+            msSinceWalkCheck = 0
+        }
         return true
     }
 

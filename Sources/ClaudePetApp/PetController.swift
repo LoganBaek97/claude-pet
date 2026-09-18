@@ -85,6 +85,10 @@ final class PetController {
         timer = nil
         dragIdle?.invalidate()
         dragIdle = nil
+        // 끌고 있는 도중에 펫을 숨기면 놓는 순간이 오지 않는다. 붙잡은 행을 남겨 두면
+        // 다시 보일 때 드래그 동작에 멈춰 있고 상태가 바뀌어도 꿈쩍하지 않는다.
+        dragTracker.reset()
+        director.hold(nil)
         stack.stopClock()
     }
 
