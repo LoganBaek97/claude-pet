@@ -29,38 +29,78 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSSize(width: CGFloat(SpriteSheet.cellWidth) * prefs.scale, height: CGFloat(SpriteSheet.cellHeight) * prefs.scale)
     }
 
-    /// 컨테이너 = 펫 위에 말풍선(높이 20 + 간격 4). 너비는 둘 중 넓은 쪽, 펫은 하단 중앙.
+    /// 펫 위에 말풍선이 쌓인다. 패널은 지금 떠 있는 말풍선만큼만 커진다.
+    /// 창 크기 자체는 애니메이션하지 않고(끊겨 보인다) 즉시 바꾼 뒤 안에서 카드만 움직인다.
+    /// 창이 전부 투명이라 크기가 튀는 것은 눈에 띄지 않는다.
+    static let petBubbleGap: CGFloat = 8
+    /// 카드 그림자가 패널 가장자리에서 잘리지 않게 두는 여백.
+    static let shadowPad: CGFloat = 12
+
+    /// 펫이 선 자리 위로 화면에 남은 높이. 여기에 들어갈 만큼만 카드를 띄운다.
+    func maxCardsThatFit() -> Int {
+        let petBottom = panel.frame.minY
+        let screen = NSScreen.screens.first { $0.frame.intersects(panel.frame) } ?? NSScreen.main
+        guard let screen else { return BubbleStackView.expandedLimit }
+        let room = screen.visibleFrame.maxY - petBottom - petSize().height - Self.petBubbleGap - Self.shadowPad
+        for n in stride(from: BubbleStackView.expandedLimit, through: 1, by: -1)
+        where BubbleStackView.height(forCards: n) <= room {
+            return n
+        }
+        return 1
+    }
+
+    private var isLayingOut = false
+
     func layout() {
+        // maxCards 를 바꾸면 스택이 다시 그려지고 그 콜백이 여기로 돌아온다. 한 번만 돈다.
+        guard !isLayingOut else { return }
+        isLayingOut = true
+        defer { isLayingOut = false }
         let pet = petSize()
-        let bubbleSize = controller.bubble.isHidden ? NSSize.zero : controller.bubble.frame.size
-        let width = max(pet.width, bubbleSize.width)
-        let height = pet.height + (bubbleSize.height > 0 ? bubbleSize.height + 4 : 0)
+        let pad = Self.shadowPad
+        let width = max(pet.width, SessionBubbleView.width + pad * 2)
+        controller.stack.maxCards = maxCardsThatFit()
+        // 사라지는 중인 카드까지 덮는 높이로 잡는다. 먼저 줄이면 그 카드의 블러가 잘린 자국으로 남는다.
+        let stackHeight = controller.stack.occupiedHeight
+        let height = pet.height + (stackHeight > 0 ? Self.petBubbleGap + stackHeight + pad : 0)
         panel.resize(to: NSSize(width: width, height: height), prefs: prefs)
         container.frame = NSRect(origin: .zero, size: NSSize(width: width, height: height))
+        // 투명 패널은 크기가 줄어든 자리를 스스로 지우지 않는다. 매번 다시 그리게 한다.
+        panel.viewsNeedDisplay = true
+        panel.invalidateShadow()
         controller.view.frame = NSRect(x: (width - pet.width) / 2, y: 0, width: pet.width, height: pet.height)
-        controller.bubble.frame.origin = NSPoint(x: (width - bubbleSize.width) / 2, y: pet.height + 4)
+        controller.stack.frame = NSRect(x: pad, y: pet.height + Self.petBubbleGap,
+                                        width: width - pad * 2, height: max(stackHeight, 0))
+    }
+
+    /// 마우스를 받아야 하는 영역: 펫과 지금 떠 있는 말풍선들. 그 바깥은 클릭이 밑으로 통과한다.
+    func hitRects() -> [NSRect] {
+        var rects = [controller.view.convert(controller.view.bounds, to: nil)]
+        rects.append(contentsOf: controller.stack.visibleCardFrames)
+        return rects.map { panel.convertToScreen($0) }
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         controller.view.frame = NSRect(origin: .zero, size: petSize())
         panel.contentView = container
         container.addSubview(controller.view)
-        container.addSubview(controller.bubble)
+        container.addSubview(controller.stack)
         controller.onLayoutChange = { [weak self] in self?.layout() }
         controller.onOpenFailed = { [weak self] in self?.warning = "세션이 돌고 있는 앱을 찾지 못했습니다" }
         controller.view.onDragEnd = { [weak self] in
             guard let self else { return }
             self.prefs.position = self.panel.frame.origin
+            // 옮긴 자리 위에 남은 화면 높이가 달라졌다. 들어갈 만큼으로 카드 수를 다시 잡는다.
+            self.layout()
         }
         panel.place(using: prefs)
         layout()
         panel.place(using: prefs)
-        hover = HoverTracker(panel: panel) { [weak self] in
-            guard let self else { return .zero }
-            let inView = self.controller.view.bounds
-            let inWindow = self.controller.view.convert(inView, to: nil)
-            return self.panel.convertToScreen(inWindow)
-        }
+        hover = HoverTracker(panel: panel, hitRects: { [weak self] in
+            self?.hitRects() ?? []
+        }, onChange: { [weak self] inside in
+            self?.controller.setHovered(inside)
+        })
 
         controller.isBubbleHidden = prefs.isBubbleHidden
         loadSelectedPet()

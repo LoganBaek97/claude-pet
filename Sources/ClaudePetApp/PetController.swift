@@ -1,11 +1,11 @@
 import AppKit
 import ClaudePetCore
 
-/// 시트·디렉터·타이머를 묶어 뷰에 프레임을 밀어 넣고, 말풍선과 클릭을 다룬다.
+/// 시트·디렉터·타이머를 묶어 뷰에 프레임을 밀어 넣고, 말풍선 스택과 클릭을 다룬다.
 final class PetController {
     let view = PetLayerView(frame: .zero)
-    let bubble = SpeechBubbleView(frame: .zero)
-    /// 말풍선 크기가 바뀌면 AppDelegate 가 패널 크기를 다시 잡는다.
+    let stack = BubbleStackView(frame: .zero)
+    /// 말풍선 높이가 바뀌면 AppDelegate 가 히트 영역을 다시 잡는다.
     var onLayoutChange: (() -> Void)?
     var onOpenFailed: (() -> Void)?
 
@@ -19,16 +19,23 @@ final class PetController {
 
     /// 켜면 말풍선을 아예 띄우지 않는다. 펫 애니메이션은 그대로 둔다.
     var isBubbleHidden = false {
-        didSet { if isBubbleHidden != oldValue { refreshBubble() } }
+        didSet {
+            guard isBubbleHidden != oldValue else { return }
+            stack.isBubbleHidden = isBubbleHidden
+            stack.apply(aggregate)
+            onLayoutChange?()
+        }
     }
 
     init() {
         view.onClick = { [weak self] in self?.handleClick() }
-        director.reducedMotion = Self.systemReducedMotion
+        stack.onSelect = { [weak self] summary in self?.open(summary) }
+        stack.onHeightChange = { [weak self] in self?.onLayoutChange?() }
+        applyReducedMotion()
         observers.append(NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification, object: nil, queue: .main) { [weak self] _ in
             guard let self else { return }
-            self.director.reducedMotion = Self.systemReducedMotion
+            self.applyReducedMotion()
             self.render(self.director.current)
             self.scheduleNext()
         })
@@ -37,6 +44,12 @@ final class PetController {
     deinit { observers.forEach { NSWorkspace.shared.notificationCenter.removeObserver($0) } }
 
     private static var systemReducedMotion: Bool { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
+
+    private func applyReducedMotion() {
+        let reduced = Self.systemReducedMotion
+        director.reducedMotion = reduced
+        stack.reducedMotion = reduced
+    }
 
     func loadPet(_ pet: InstalledPet) throws {
         let sheet = try SpriteSheet(contentsOf: pet.spritesheetURL, spriteVersion: pet.manifest.spriteVersion)
@@ -55,6 +68,7 @@ final class PetController {
     func start() {
         isRunning = true
         scheduleNext()
+        stack.startClock()
     }
 
     /// 패널이 숨겨져 있는 동안 렌더 타이머를 멈춘다(F-7). `start()`로 다시 켠다.
@@ -62,6 +76,7 @@ final class PetController {
         isRunning = false
         timer?.invalidate()
         timer = nil
+        stack.stopClock()
     }
 
     /// 프레임마다 길이가 달라 반복 타이머 대신 지금 프레임의 길이로 다음 advance 를 매번 예약한다.
@@ -78,7 +93,8 @@ final class PetController {
         RunLoop.main.add(next, forMode: .common)
     }
 
-    /// 상태가 실제로 바뀔 때만 프레임을 즉시 갈아 끼우고 타이머를 다시 잡는다. 같은 상태로 매초 불려도(폴링) 느린 idle 이 밀리지 않게.
+    /// 상태가 실제로 바뀔 때만 프레임을 즉시 갈아 끼우고 타이머를 다시 잡는다.
+    /// 같은 상태로 매초 불려도(폴링) 느린 idle 이 밀리지 않게.
     func apply(_ agg: Aggregate) {
         let stateChanged = agg.state != aggregate.state
         aggregate = agg
@@ -87,20 +103,24 @@ final class PetController {
             render(director.current)
             scheduleNext()
         }
-        refreshBubble()
+        stack.apply(agg)
     }
 
-    /// 현재 상태와 설정으로 말풍선을 다시 그린다. 크기가 바뀌면 패널 레이아웃을 다시 잡게 한다.
-    private func refreshBubble() {
-        let before = bubble.frame.size
-        let after = bubble.update(text: isBubbleHidden ? nil : BubbleText.text(for: aggregate),
-                                  emphasis: isBubbleHidden ? .none : BubbleText.emphasis(for: aggregate.state),
-                                  maxWidth: 220)
-        if before != after { onLayoutChange?() }
+    /// 마우스가 펫이나 말풍선 위에 있는 동안은 유휴 세션까지 펼쳐 보여 준다.
+    func setHovered(_ hovered: Bool) {
+        stack.setExpanded(hovered)
     }
 
     func handleClick() {
         if !SessionOpener.open(aggregate) { onOpenFailed?() }
+    }
+
+    /// 카드를 누르면 그 세션 하나만 담은 합성으로 연다. 펫 클릭이 대표 세션을 여는 것과 같은 길이다.
+    private func open(_ summary: SessionSummary) {
+        let one = Aggregate(state: summary.state, session: summary.session,
+                            waitingCount: summary.state == .waiting ? 1 : 0,
+                            liveSessionCount: 1, sessions: [summary])
+        if !SessionOpener.open(one) { onOpenFailed?() }
     }
 
     private func render(_ frame: AnimationFrame) {

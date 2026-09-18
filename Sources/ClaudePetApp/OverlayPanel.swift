@@ -41,6 +41,9 @@ final class OverlayPanel: NSPanel {
         setFrameOrigin(NSPoint(x: f.maxX - frame.width - Self.margin, y: f.minY + Self.margin))
     }
 
+    /// 패널은 펫 + 말풍선 스택이 다 들어가는 크기로 한 번만 잡는다. 말풍선이 늘고 줄 때마다 창을 키우면
+    /// 창 크기 애니메이션이 끊겨 보이므로, 크기는 고정하고 안에서 움직인다.
+    /// 기준점은 펫이 선 우하단 모서리다.
     func resize(to size: NSSize, prefs: Preferences) {
         let bottomRight = NSPoint(x: frame.maxX, y: frame.minY)
         setFrame(NSRect(x: bottomRight.x - size.width, y: bottomRight.y, width: size.width, height: size.height), display: true)

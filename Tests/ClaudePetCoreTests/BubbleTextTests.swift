@@ -67,3 +67,53 @@ extension BubbleTextTests {
         XCTAssertNil(BubbleText.text(for: codex(.idle)))
     }
 }
+
+// MARK: 세션별 한 줄
+
+final class SessionBubbleTextTests: XCTestCase {
+    func summary(_ state: PetState, tool: String = "", cwd: String = "/Users/x/my-project",
+                 agent: Agent = .claude, id: String = "abcdef0123", ts: TimeInterval = 100) -> SessionSummary {
+        SessionSummary(session: SessionState(sessionId: id, state: state, tool: tool, cwd: cwd, agent: agent, ts: ts),
+                       state: state)
+    }
+
+    func testTitleIsProjectName() {
+        XCTAssertEqual(BubbleText.title(for: summary(.running)), "my-project")
+    }
+
+    /// cwd 가 없으면 빈 카드가 되지 않도록 세션 id 앞자리를 쓴다.
+    func testTitleFallsBackToSessionIdPrefix() {
+        XCTAssertEqual(BubbleText.title(for: summary(.running, cwd: "", id: "abcdef0123")), "abcdef")
+    }
+
+    func testDetailPerState() {
+        XCTAssertEqual(BubbleText.detail(for: summary(.running, tool: "Bash")), "작업 중 · Bash")
+        XCTAssertEqual(BubbleText.detail(for: summary(.running)), "작업 중")
+        XCTAssertEqual(BubbleText.detail(for: summary(.waiting)), "입력 대기")
+        XCTAssertEqual(BubbleText.detail(for: summary(.failed, tool: "Bash")), "실패 · Bash")
+        XCTAssertEqual(BubbleText.detail(for: summary(.failed)), "실패")
+        XCTAssertEqual(BubbleText.detail(for: summary(.review)), "끝남")
+        XCTAssertEqual(BubbleText.detail(for: summary(.idle)), "유휴")
+    }
+
+    /// 에이전트 배지는 카드가 따로 그린다. 본문 글자에는 섞지 않는다.
+    func testDetailDoesNotEmbedAgentName() {
+        XCTAssertEqual(BubbleText.detail(for: summary(.running, tool: "shell", agent: .codex)), "작업 중 · shell")
+    }
+
+    func testElapsed() {
+        XCTAssertEqual(BubbleText.elapsed(0), "방금")
+        XCTAssertEqual(BubbleText.elapsed(4), "방금")
+        XCTAssertEqual(BubbleText.elapsed(5), "5초")
+        XCTAssertEqual(BubbleText.elapsed(59), "59초")
+        XCTAssertEqual(BubbleText.elapsed(60), "1분")
+        XCTAssertEqual(BubbleText.elapsed(59 * 60), "59분")
+        XCTAssertEqual(BubbleText.elapsed(60 * 60), "1시간")
+        XCTAssertEqual(BubbleText.elapsed(5 * 3600), "5시간")
+    }
+
+    /// 음수(시계가 어긋난 상태 파일)도 말이 되게 나와야 한다.
+    func testElapsedClampsNegative() {
+        XCTAssertEqual(BubbleText.elapsed(-30), "방금")
+    }
+}

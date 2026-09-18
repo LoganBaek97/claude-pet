@@ -2,9 +2,11 @@
 
 Claude Code 와 Codex 세션 상태에 반응하는 macOS 데스크톱 펫. 화면 구석의 픽셀 펫이 지금 작업 중인지, 내 입력을 기다리는지, 실패했는지, 끝났는지를 애니메이션으로 보여준다.
 
-- Claude Code 와 Codex(CLI·IDE 확장·데스크톱 앱) 세션을 함께 본다. 펫은 한 마리고, Codex 세션은 말풍선 앞에 `Codex ·` 가 붙는다
-- 세션이 여러 개면 에이전트를 가리지 않고 가장 급한 상태를 따른다 (입력 대기 > 실패 > 작업 중 > 끝남 > 유휴)
-- 펫을 클릭하면 세션이 돌고 있는 앱으로 이동한다 — Claude Desktop 이면 그 세션까지, 터미널·에디터·Codex 앱이면 그 앱까지
+- Claude Code 와 Codex(CLI·IDE 확장·데스크톱 앱) 세션을 함께 본다. 펫은 한 마리고, Codex 세션 말풍선에는 `Codex` 배지가 붙는다
+- 세션이 여러 개면 펫은 에이전트를 가리지 않고 가장 급한 상태를 따른다 (입력 대기 > 실패 > 작업 중 > 끝남 > 유휴)
+- 말풍선은 세션마다 하나씩, 급한 것이 펫에 가깝게 쌓인다. 평소에는 작업 중인 세션만 보이고 펫이나 말풍선에 마우스를 올리면 유휴 세션까지 펼쳐진다
+- 말풍선을 누르면 그 세션이 돌고 있는 앱으로 간다
+- 펫을 클릭하면 가장 급한 세션이 돌고 있는 앱으로 이동한다 — Claude Desktop 이면 그 세션까지, 터미널·에디터·Codex 앱이면 그 앱까지
 - 펫을 드래그해 원하는 위치에 두면 재시작해도 유지된다
 - 펫 자산은 Codex 포맷(v1 8열×9행, v2 8열×11행)을 그대로 읽는다. 버전은 `pet.json` 의 `spriteVersionNumber` 로 정한다(생략 시 v1). [codex-pets.net](https://codex-pets.net) 의 펫을 `claude-pet add <id>` 로 설치한다
 
@@ -104,7 +106,18 @@ Claude Code 와 Codex 의 훅(`hooks/hook.sh`)이 이벤트마다 `~/Library/App
 
 두 에이전트의 훅은 설정 파일 모양과 stdin 필드(`session_id`, `cwd`, `hook_event_name`, `tool_name`)가 같아서 스크립트 하나를 같이 쓴다. Claude 는 `~/.claude/settings.json` 의 `hooks`, Codex 는 `~/.codex/hooks.json` 에 걸리고, Codex 쪽 명령에는 `--agent codex` 가 붙어 상태 파일의 `agent` 필드로 남는다. Codex 에는 `Notification`, `PostToolUseFailure`, `StopFailure` 이벤트가 없어서 Codex 세션은 "실패" 상태에 들어가지 않는다. 대신 사용자가 끊는 `Interrupt` 가 있고 이건 유휴로 간다. Codex 는 `SessionEnd` 와 `Interrupt` 훅을 최대 3초까지만 기다리므로 그 둘은 타임아웃 3초로 건다.
 
-펫을 누르면 상태 파일에 기록된 호스트를 보고 갈 곳을 정한다. Claude Desktop 세션은 환경변수 `CLAUDE_CODE_HOST_SESSION_ID` 가 있어서 `claude://code/continue?session=local_...` 딥링크로 그 세션까지 간다(앱이 받는 형식은 `^local_[A-Za-z0-9-]{1,64}$` 뿐이라 Claude Code 쪽 세션 UUID 를 넣으면 거절당한다). 그 밖의 호스트는 훅이 조상 프로세스에서 찾아 둔 `.app` 번들과 pid 로 그 앱을 앞으로 가져온다.
+말풍선은 살아 있는 세션마다 한 장씩 뜬다. 카드에는 프로젝트 이름, 상태와 도구, 마지막 신호로부터 지난 시간이 담기고
+Codex 세션은 `Codex` 배지가 붙는다. 평소에는 유휴가 아닌 세션만 최대 네 장까지 보여 주고 나머지는 "세션 N개 더" 로
+세어 준다. 펫이나 말풍선에 마우스를 올리면 유휴 세션까지 펼쳐진다. 펫 위에 남은 화면 높이가 모자라면 그만큼만 띄운다.
+말풍선 바깥은 클릭이 아래 창으로 그대로 통과한다. 메뉴의 "대화창 끄기" 로 말풍선 전체를 끌 수 있다.
+
+세션을 중단하거나 세션에 메시지를 보내는 기능은 넣지 않았다. Claude Code 로컬 대화형 세션에 외부 프로그램이
+메시지를 넣는 공식 경로가 없고(`claude stop` 은 `--bg` 배경 세션 전용, `--cloud … -p` 는 클라우드 세션 전용),
+중단도 프로세스에 SIGINT 를 보내면 턴만 끊기는 게 아니라 세션이 죽는다. Esc 처럼 턴만 끊으려면 키 입력을 그
+터미널에 넣어야 하는데 macOS 에는 외부 앱이 그럴 방법이 없다(`TIOCSTI` 미지원). 손쉬운 사용 권한을 받아 키를
+합성하는 길은 남아 있지만 권한을 요구하지 않기로 했다.
+
+펫이나 말풍선을 누르면 상태 파일에 기록된 호스트를 보고 갈 곳을 정한다. Claude Desktop 세션은 환경변수 `CLAUDE_CODE_HOST_SESSION_ID` 가 있어서 `claude://code/continue?session=local_...` 딥링크로 그 세션까지 간다(앱이 받는 형식은 `^local_[A-Za-z0-9-]{1,64}$` 뿐이라 Claude Code 쪽 세션 UUID 를 넣으면 거절당한다). 그 밖의 호스트는 훅이 조상 프로세스에서 찾아 둔 `.app` 번들과 pid 로 그 앱을 앞으로 가져온다.
 
 설계 문서: [docs/superpowers/specs/2026-09-15-claude-pet-design.md](docs/superpowers/specs/2026-09-15-claude-pet-design.md)
 
