@@ -73,14 +73,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                         width: width - pad * 2, height: max(stackHeight, 0))
     }
 
-    /// 마우스를 받아야 하는 영역: 펫과 말풍선, 그리고 그 사이. 바깥은 클릭이 밑으로 통과한다.
+    /// 마우스를 받아야 하는 영역. 바깥은 클릭이 밑으로 통과한다.
     ///
-    /// 펫과 말풍선을 따로 주면 둘 사이 빈 칸을 지날 때 펼친 목록이 접힌다. 커서가 위아래로
-    /// 오가는 길을 끊지 않도록 둘을 감싸는 사각형 하나로 준다.
+    /// 펫과 말풍선을 감싸는 사각형 하나로 주면 펫 양옆 빈 공간까지 잡혀 아래 창을 가린다.
+    /// 그렇다고 둘만 따로 주면 사이의 빈 칸을 지날 때 펼친 목록이 접힌다. 그래서 셋으로 나눈다.
+    /// 펫, 말풍선, 그리고 둘을 잇는 8pt 통로.
     func hitRects() -> [NSRect] {
         let pet = controller.view.convert(controller.view.bounds, to: nil)
         guard let bubbles = controller.stack.hoverBox else { return [panel.convertToScreen(pet)] }
-        return [panel.convertToScreen(pet.union(bubbles))]
+        // 통로는 말풍선 너비만큼 넓고 펫 위 빈 칸만큼만 높다. 대각선으로 지나가도 끊기지 않는다.
+        let bridge = NSRect(x: bubbles.minX, y: pet.maxY,
+                            width: bubbles.width, height: max(0, bubbles.minY - pet.maxY))
+        return [pet, bubbles, bridge].filter { !$0.isEmpty }.map { panel.convertToScreen($0) }
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
