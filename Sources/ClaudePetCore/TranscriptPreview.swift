@@ -70,7 +70,8 @@ public enum TranscriptPreview {
     public static func condense(_ text: String, limit: Int) -> String? {
         var s = text
         // 줄 앞의 마크다운 표식(제목, 목록, 인용)과 강조·코드 기호를 없앤다. 말풍선에서 읽을 이유가 없다.
-        for pattern in [#"(?m)^[ \t]*(#{1,6}|[-*+]|>|\d+\.)[ \t]+"#, #"[*_`~]"#] {
+        // `_` 는 빼 둔다. 강조 기호보다 코드 식별자(file_path)로 쓰이는 일이 훨씬 많다.
+        for pattern in [#"(?m)^[ \t]*(#{1,6}|[-*+]|>|\d+\.)[ \t]+"#, #"[*`~]"#] {
             s = s.replacingOccurrences(of: pattern, with: "", options: .regularExpression)
         }
         s = s.replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)

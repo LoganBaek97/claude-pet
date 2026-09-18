@@ -23,10 +23,13 @@ final class BubbleStackView: NSView {
         didSet { if maxCards != oldValue { rebuild() } }
     }
 
-    /// `count` 장을 쌓는 데 드는 높이.
+    /// 카드마다 높이가 다르다(미리보기가 붙으면 길어지고 호버하면 더 길어진다). 그래서 장수만으로는
+    /// 높이를 셀 수 없다. 화면에 몇 장이 들어가는지 가늠할 때만 쓰고, 그때는 가장 긴 카드로 센다.
+    /// 짧은 쪽으로 어림하면 미리보기가 붙은 카드가 화면 밖으로 밀려 나간다.
     static func height(forCards count: Int) -> CGFloat {
         guard count > 0 else { return 0 }
-        return CGFloat(count) * SessionBubbleView.height + CGFloat(count - 1) * spacing
+        let tallest = SessionBubbleView.height(previewLines: 2)
+        return CGFloat(count) * tallest + CGFloat(count - 1) * spacing
     }
 
     var onSelect: ((SessionSummary) -> Void)?
@@ -311,9 +314,15 @@ final class BubbleStackView: NSView {
     private func refreshText() {
         guard !visible.isEmpty else { return }
         let now = Date()
+        var heightChanged = false
         for summary in visible {
-            cards[summary.session.sessionId]?.update(summary, now: now, preview: preview(for: summary))
+            guard let card = cards[summary.session.sessionId] else { continue }
+            card.update(summary, now: now, preview: preview(for: summary))
+            // 훅이 상태 파일을 쓴 뒤에야 에이전트가 트랜스크립트를 비운다. 그 틈에 읽으면 미리보기가
+            // 비어 있고 다음 초에 생긴다. 그때 카드 높이가 그대로면 글자가 들어갈 자리가 없다.
+            if abs(card.frame.height - height(for: summary)) > 0.5 { heightChanged = true }
         }
+        if heightChanged { relayout() }
     }
 
     // MARK: 애니메이션

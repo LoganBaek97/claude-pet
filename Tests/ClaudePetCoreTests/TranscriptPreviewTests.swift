@@ -91,6 +91,11 @@ final class TranscriptPreviewTests: XCTestCase {
         XCTAssertEqual(TranscriptPreview.condense("**굵게** 그리고 `코드`", limit: 100), "굵게 그리고 코드")
     }
 
+    /// 밑줄은 강조 기호이기도 하지만 코드 식별자에 훨씬 흔하다. 지우면 글자를 망친다.
+    func testCondenseKeepsUnderscores() {
+        XCTAssertEqual(TranscriptPreview.condense("file_path 를 고쳤습니다", limit: 100), "file_path 를 고쳤습니다")
+    }
+
     func testCondenseEmptyGivesNil() {
         XCTAssertNil(TranscriptPreview.condense("   \n  ", limit: 100))
         XCTAssertNil(TranscriptPreview.condense("", limit: 100))
@@ -175,6 +180,19 @@ final class TranscriptStoreTests: XCTestCase {
         XCTAssertGreaterThan(size, TranscriptPreview.tailBytes, "꼬리 읽기가 실제로 동작하는 크기여야 한다")
         let store = TranscriptStore()
         XCTAssertEqual(store.preview(for: summary(.review, transcript: url.path)), "맨 끝 답변")
+    }
+
+    /// 꼬리를 자르면 첫 줄이 글자 중간에서 끊긴다. 그 줄만 버리고 뒤의 온전한 발화는 살려야 한다.
+    /// 실제로 자른 모양을 그대로 본뜬다. 깨진 바이트로 시작하는 반 토막 줄, 줄바꿈, 온전한 줄.
+    func testBrokenUTF8TailStillYieldsLastMessage() throws {
+        let url = dir.appendingPathComponent("broken.jsonl")
+        var data = Data([0xED, 0x95])   // "한" 의 앞 두 바이트만. 홀로는 올바른 UTF-8 이 아니다.
+        data.append(Data(#"ssistant","content":[{"type":"text","text":"반 토막"}]}}"#.utf8))
+        data.append(Data("\n".utf8))
+        data.append(Data((assistant("온전한 마지막 답변") + "\n").utf8))
+        try data.write(to: url)
+        let store = TranscriptStore()
+        XCTAssertEqual(store.preview(for: summary(.review, transcript: url.path)), "온전한 마지막 답변")
     }
 
     func testForgetAllDropsSessionsThatAreGone() throws {

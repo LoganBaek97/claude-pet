@@ -198,14 +198,6 @@ final class SessionBubbleView: NSView {
     /// 마우스가 올라가 있지 않을 때의 불투명도. 유휴 카드만 낮다.
     private(set) var restingAlpha: CGFloat = 1
 
-    /// 미리보기가 있으면 평소 한 줄, 마우스를 올리면 두 줄. 없으면 0.
-    var previewLines: Int {
-        guard showsContent, previewLabel.stringValue.isEmpty == false else { return 0 }
-        return isHovered ? 2 : 1
-    }
-
-    /// 이 카드가 지금 차지해야 하는 높이.
-    var wantedHeight: CGFloat { Self.height(previewLines: previewLines) }
 
     // MARK: 배치
 

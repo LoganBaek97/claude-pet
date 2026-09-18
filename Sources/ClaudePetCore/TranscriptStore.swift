@@ -58,8 +58,9 @@ public final class TranscriptStore {
             let offset = end > UInt64(tailBytes) ? end - UInt64(tailBytes) : 0
             try handle.seek(toOffset: offset)
             guard let data = try handle.readToEnd() else { return nil }
-            // 꼬리를 자르면 UTF-8 글자 중간에서 끊길 수 있다. 그때는 앞을 한 바이트씩 버린다.
-            guard let text = decode(data) else { return nil }
+            // 꼬리를 자르면 UTF-8 글자 중간에서 끊긴다. 손실을 허용해 디코딩하면 깨진 자리만
+            // 대체 문자가 되고 나머지 줄은 그대로 읽힌다. 엄격하게 하면 파일 전체를 버리게 된다.
+            let text = String(decoding: data, as: UTF8.self)
             guard let raw = TranscriptPreview.lastAssistantText(jsonl: text, agent: agent) else { return nil }
             return TranscriptPreview.condense(raw, limit: charLimit)
         } catch {
@@ -67,10 +68,4 @@ public final class TranscriptStore {
         }
     }
 
-    private func decode(_ data: Data) -> String? {
-        for skip in 0..<4 {
-            if let text = String(data: data.dropFirst(skip), encoding: .utf8) { return text }
-        }
-        return nil
-    }
 }
