@@ -6,6 +6,9 @@ public struct SessionState: Codable, Equatable, Sendable {
     public let event: String
     public let tool: String
     public let cwd: String
+    /// 세션 트랜스크립트(JSONL) 경로. 앱이 마지막 답변을 읽어 미리보기로 쓴다.
+    /// 예전 버전 훅이 쓴 파일에는 없으므로 옵셔널이어야 한다.
+    public let transcript: String?
     /// Claude Desktop 이 호스팅하는 세션의 앱 쪽 ID(`local_...`). 다른 호스트면 nil.
     /// 예전 버전 훅이 쓴 파일에는 없으므로 옵셔널이어야 한다.
     public let hostSessionId: String?
@@ -19,7 +22,7 @@ public struct SessionState: Codable, Equatable, Sendable {
     public let ts: TimeInterval
 
     enum CodingKeys: String, CodingKey {
-        case sessionId = "session_id", state, event, tool, cwd
+        case sessionId = "session_id", state, event, tool, cwd, transcript
         case hostSessionId = "host_session"
         case hostPid = "host_pid"
         case hostApp = "host_app"
@@ -28,10 +31,10 @@ public struct SessionState: Codable, Equatable, Sendable {
     }
 
     public init(sessionId: String, state: PetState, event: String = "", tool: String = "", cwd: String = "",
-                hostSessionId: String? = nil, hostPid: Int32? = nil, hostApp: String? = nil,
+                transcript: String? = nil, hostSessionId: String? = nil, hostPid: Int32? = nil, hostApp: String? = nil,
                 agent: Agent = .claude, ts: TimeInterval) {
         self.sessionId = sessionId; self.state = state; self.event = event
-        self.tool = tool; self.cwd = cwd; self.hostSessionId = hostSessionId
+        self.tool = tool; self.cwd = cwd; self.transcript = transcript; self.hostSessionId = hostSessionId
         self.hostPid = hostPid; self.hostApp = hostApp; self.agentId = agent.rawValue; self.ts = ts
     }
 

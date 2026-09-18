@@ -29,6 +29,10 @@ case "$session" in *[!A-Za-z0-9._-]*) exit 0;; esac
 event=$(first_value hook_event_name)
 tool=$(first_value tool_name)
 cwd=$(first_value cwd)
+# 트랜스크립트 경로. 앱이 이걸 읽어 마지막 답변을 말풍선 미리보기로 쓴다.
+# 글자 자체를 여기서 넣지 않는 이유: 모델 출력에는 따옴표·줄바꿈·제어문자가 섞여 있어
+# printf 로 짜는 이 JSON 을 깨뜨린다. 경로는 cwd 와 같은 수준으로 안전하다.
+transcript=$(first_value transcript_path)
 
 # Claude Desktop 이 호스팅하는 세션이면 앱의 세션 ID 가 환경에 있다. 딥링크는
 # 이 값만 받는다(`^local_[A-Za-z0-9-]{1,64}$`). 형식이 어긋나면 비워서 링크에서 뺀다.
@@ -84,8 +88,8 @@ esc() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
 mkdir -p "$dir" 2>/dev/null || exit 0
 ts=$(date +%s)
 tmp="$file.tmp.$$"
-printf '{"session_id":"%s","state":"%s","event":"%s","tool":"%s","cwd":"%s","host_session":"%s","host_pid":%s,"host_app":"%s","agent":"%s","ts":%s}\n' \
-  "$session" "$state" "$(esc "$event")" "$(esc "$tool")" "$(esc "$cwd")" "$host" "${host_pid:-0}" "$(esc "$host_app")" "$agent" "$ts" > "$tmp" 2>/dev/null \
+printf '{"session_id":"%s","state":"%s","event":"%s","tool":"%s","cwd":"%s","transcript":"%s","host_session":"%s","host_pid":%s,"host_app":"%s","agent":"%s","ts":%s}\n' \
+  "$session" "$state" "$(esc "$event")" "$(esc "$tool")" "$(esc "$cwd")" "$(esc "$transcript")" "$host" "${host_pid:-0}" "$(esc "$host_app")" "$agent" "$ts" > "$tmp" 2>/dev/null \
   && mv -f "$tmp" "$file" 2>/dev/null
 rm -f "$tmp" 2>/dev/null
 exit 0

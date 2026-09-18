@@ -79,7 +79,7 @@ Codex에는 Notification, PostToolUseFailure, StopFailure가 없어 Codex 세션
 {"session_id":"…","state":"waiting","event":"PermissionRequest","tool":"Bash","cwd":"/path/to/project","agent":"codex","ts":1789000000}
 ```
 
-`ts`는 Unix 초. `tool`과 `cwd`는 없으면 빈 문자열. `agent`는 `claude` 또는 `codex`이고, 예전 훅이 쓴 파일처럼 없거나 모르는 값이면 앱은 `claude`로 읽는다.
+`ts`는 Unix 초. `tool`과 `cwd`는 없으면 빈 문자열. `transcript`는 훅 입력의 `transcript_path`이고, 앱이 이 파일의 끝 256KB를 읽어 마지막 어시스턴트 발화를 말풍선 미리보기로 쓴다. 발화 글자 자체는 여기 적지 않는다. 훅은 JSON을 `printf`로 손수 짜기 때문에 모델이 낸 임의의 글자(제어문자, 따옴표)를 끼워 넣으면 파일이 깨진다. `agent`는 `claude` 또는 `codex`이고, 예전 훅이 쓴 파일처럼 없거나 모르는 값이면 앱은 `claude`로 읽는다.
 
 ### 에이전트 (`ClaudePetCore.Agent`)
 

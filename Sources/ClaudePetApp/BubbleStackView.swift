@@ -41,6 +41,10 @@ final class BubbleStackView: NSView {
     /// 사라지는 중인 카드. 애니메이션이 끝나기 전에 창이 줄어들면 재질(블러)이 잘린 채 화면에 남는다.
     /// 이게 비기 전까지 패널 높이를 줄이지 않는다.
     private var dismissing: Set<String> = []
+    /// 마우스가 올라가 있는 카드. 그 카드만 미리보기를 두 줄로 편다.
+    private var hoveredId: String?
+    /// 트랜스크립트에서 읽은 미리보기 글자. 파일이 자란 것만 다시 읽는다.
+    private let transcripts = TranscriptStore()
     /// 사용자가 닫은 말풍선. 세션 id -> 닫을 때의 상태.
     /// 그 상태가 이어지는 동안만 감춘다. 상태가 달라지면 새로 알릴 일이 생긴 것이라 다시 뜬다.
     /// 알림을 지우는 것과 같고, 세션 자체에는 아무 영향이 없다.
@@ -82,7 +86,33 @@ final class BubbleStackView: NSView {
     func apply(_ agg: Aggregate) {
         aggregate = agg
         forgetClosedSessionsThatAreGone()
+        transcripts.forgetAll(except: Set(agg.sessions.compactMap(\.session.transcript)))
         rebuild()
+    }
+
+    /// 마우스가 오르내리면 그 카드의 미리보기가 한 줄에서 두 줄로 펴진다. 높이가 달라지니 다시 쌓는다.
+    private func cardHoverChanged(_ summary: SessionSummary, hovered: Bool) {
+        let id = summary.session.sessionId
+        if hovered {
+            hoveredId = id
+        } else if hoveredId == id {
+            hoveredId = nil
+        } else {
+            return
+        }
+        guard preview(for: summary) != nil else { return }
+        relayout()
+    }
+
+    /// 카드를 지우거나 만들지 않고 자리만 다시 잡는다.
+    private func relayout() {
+        let targets = slots(for: visible)
+        onHeightChange?()
+        for (i, summary) in visible.enumerated() {
+            guard let card = cards[summary.session.sessionId] else { continue }
+            move(card, to: targets[i])
+        }
+        onHeightChange?()
     }
 
     func setExpanded(_ expanded: Bool) { isExpanded = expanded }
@@ -133,32 +163,59 @@ final class BubbleStackView: NSView {
         let alphaScale: CGFloat
     }
 
+    /// 그 세션 카드가 차지할 높이. 미리보기가 있으면 한 줄, 마우스가 올라가 있으면 두 줄만큼 길다.
+    private func height(for summary: SessionSummary) -> CGFloat {
+        guard preview(for: summary) != nil else { return SessionBubbleView.height }
+        let lines = hoveredId == summary.session.sessionId ? 2 : 1
+        return SessionBubbleView.height(previewLines: lines)
+    }
+
+    private func preview(for summary: SessionSummary) -> String? {
+        transcripts.preview(for: summary)
+    }
+
     /// 펼친 모습은 목록, 접은 모습은 아이폰 알림처럼 겹친 더미다.
     /// 겹칠 때는 가운데를 기준으로 줄어들기 때문에, 뒤 카드가 일정하게 고개를 내밀도록 y 를 보정한다.
-    private func slots(for count: Int) -> [Slot] {
-        let w = SessionBubbleView.width, h = SessionBubbleView.height
+    private func slots(for summaries: [SessionSummary]) -> [Slot] {
+        let w = SessionBubbleView.width
         let x = (bounds.width - w) / 2
-        return (0..<count).map { i in
-            if isExpanded {
-                return Slot(frame: NSRect(x: x, y: CGFloat(i) * (h + Self.spacing), width: w, height: h),
-                            scale: 1, alphaScale: 1)
+        guard !summaries.isEmpty else { return [] }
+
+        if isExpanded {
+            // 아래에서 위로 쌓으면서 카드마다 제 높이만큼 자리를 준다.
+            var y: CGFloat = 0
+            return summaries.map { summary in
+                let h = height(for: summary)
+                let slot = Slot(frame: NSRect(x: x, y: y, width: w, height: h), scale: 1, alphaScale: 1)
+                y += h + Self.spacing
+                return slot
             }
+        }
+
+        // 접힌 더미: 맨 앞만 온전한 카드고 뒤는 빈 판이다. 판은 앞 카드 위로 일정하게 고개를 내민다.
+        // 가운데를 기준으로 줄어들기 때문에 내민 높이가 일정해지도록 y 를 보정한다.
+        let frontHeight = height(for: summaries[0])
+        return summaries.enumerated().map { i, summary in
+            guard i > 0 else {
+                return Slot(frame: NSRect(x: x, y: 0, width: w, height: frontHeight), scale: 1, alphaScale: 1)
+            }
+            let h = SessionBubbleView.height
             let scale = max(1 - Self.depthScale * CGFloat(i), 0.7)
-            let y = CGFloat(i) * Self.peek + (1 - scale) * h / 2
+            let y = frontHeight + CGFloat(i) * Self.peek - h + (1 - scale) * h / 2
             return Slot(frame: NSRect(x: x, y: y, width: w, height: h),
-                        scale: scale, alphaScale: i == 0 ? 1 : max(1 - 0.3 * CGFloat(i), 0.35))
+                        scale: scale, alphaScale: max(1 - 0.3 * CGFloat(i), 0.35))
         }
     }
 
-    /// 접힌 더미가 눈에 차지하는 높이. 맨 앞 카드 + 뒤 카드들이 내민 만큼.
-    private func stackedHeight(_ count: Int) -> CGFloat {
-        guard count > 0 else { return 0 }
-        return SessionBubbleView.height + CGFloat(count - 1) * Self.peek
+    /// 접힌 더미가 눈에 차지하는 높이. 맨 앞 카드 + 뒤 판들이 내민 만큼.
+    private func stackedHeight(_ summaries: [SessionSummary]) -> CGFloat {
+        guard let front = summaries.first else { return 0 }
+        return height(for: front) + CGFloat(summaries.count - 1) * Self.peek
     }
 
     /// 카드를 놓는 데 필요한 높이.
     var contentHeight: CGFloat {
-        let cards = isExpanded ? Self.height(forCards: visible.count) : stackedHeight(visible.count)
+        let cards = isExpanded ? (slots(for: visible).last?.frame.maxY ?? 0) : stackedHeight(visible)
         guard !overflow.isHidden else { return cards }
         return cards + Self.spacing + overflow.frame.height
     }
@@ -176,9 +233,9 @@ final class BubbleStackView: NSView {
     /// 펼친 목록이 도로 접힌다. 그래서 틈까지 포함한 한 덩어리로 본다.
     var hoverBox: NSRect? {
         guard !visible.isEmpty else { return nil }
-        let targets = slots(for: visible.count)
+        let targets = slots(for: visible)
         let front = targets[0].frame
-        var top = isExpanded ? (targets.last?.frame.maxY ?? front.maxY) : stackedHeight(visible.count)
+        var top = isExpanded ? (targets.last?.frame.maxY ?? front.maxY) : stackedHeight(visible)
         if !overflow.isHidden { top = max(top, overflow.frame.maxY) }
         let box = NSRect(x: front.minX, y: front.minY, width: front.width, height: top - front.minY)
         return convert(box, to: nil)
@@ -191,7 +248,7 @@ final class BubbleStackView: NSView {
         let before = visible.count
         visible = next
         let wanted = Set(next.map(\.session.sessionId))
-        let targets = slots(for: next.count)
+        let targets = slots(for: next)
         let now = Date()
 
         // 카드가 늘어날 때는 창을 먼저 키운다. 그러지 않으면 새 카드가 창 밖에서 한두 프레임 잘려 보인다.
@@ -210,12 +267,12 @@ final class BubbleStackView: NSView {
             let card: SessionBubbleView
             if let existing = cards[id] {
                 card = existing
-                card.update(summary, now: now)
+                card.update(summary, now: now, preview: preview(for: summary))
                 move(card, to: slot)
             } else {
                 card = SessionBubbleView(sessionId: id)
                 card.reducedMotion = reducedMotion
-                card.update(summary, now: now)
+                card.update(summary, now: now, preview: preview(for: summary))
                 addSubview(card)
                 cards[id] = card
                 appear(card, at: slot)
@@ -228,6 +285,7 @@ final class BubbleStackView: NSView {
             // 콜백은 최신 상태를 물고 있어야 한다(상태가 바뀌면 여는 곳도, 닫는 기준도 달라진다).
             card.onClick = { [weak self] in self?.onSelect?(summary) }
             card.onClose = { [weak self] in self?.close(summary) }
+            card.onHoverChange = { [weak self] hovered in self?.cardHoverChanged(summary, hovered: hovered) }
         }
 
         let hadOverflow = !overflow.isHidden
@@ -243,7 +301,7 @@ final class BubbleStackView: NSView {
         }
         overflow.set(count: count)
         let size = overflow.fittingSize
-        let y = isExpanded ? top + Self.spacing : stackedHeight(visible.count) + Self.spacing
+        let y = isExpanded ? top + Self.spacing : stackedHeight(visible) + Self.spacing
         overflow.frame = NSRect(x: (bounds.width - size.width) / 2, y: y, width: size.width, height: size.height)
         overflow.layer?.zPosition = 1000
         overflow.isHidden = false
@@ -254,7 +312,7 @@ final class BubbleStackView: NSView {
         guard !visible.isEmpty else { return }
         let now = Date()
         for summary in visible {
-            cards[summary.session.sessionId]?.update(summary, now: now)
+            cards[summary.session.sessionId]?.update(summary, now: now, preview: preview(for: summary))
         }
     }
 
@@ -313,7 +371,7 @@ final class BubbleStackView: NSView {
 
     override func layout() {
         super.layout()
-        let targets = slots(for: visible.count)
+        let targets = slots(for: visible)
         for (i, summary) in visible.enumerated() {
             guard let card = cards[summary.session.sessionId] else { continue }
             card.frame = targets[i].frame

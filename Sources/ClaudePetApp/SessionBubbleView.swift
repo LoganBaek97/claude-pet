@@ -25,7 +25,13 @@ final class FirstMouseButton: NSButton {
 /// 크기는 스스로 정하고(`fittingSize`), 어디에 놓을지는 `BubbleStackView` 가 정한다.
 final class SessionBubbleView: NSView {
     static let width: CGFloat = 248
+    /// 제목과 부제만 있는 카드 높이.
     static let height: CGFloat = 46
+    /// 미리보기 한 줄, 두 줄이 붙었을 때의 높이. 호버하면 한 줄에서 두 줄로 편다.
+    static let previewLine: CGFloat = 16
+    static func height(previewLines: Int) -> CGFloat {
+        height + CGFloat(previewLines) * previewLine
+    }
     private static let dotSize: CGFloat = 8
     private static let padding: CGFloat = 12
     /// 재질 위에 얹는 테두리. 시스템 separator 는 재질 위에서 거의 안 보여서 라벨색을 옅게 쓴다.
@@ -39,6 +45,8 @@ final class SessionBubbleView: NSView {
     var onClick: (() -> Void)?
     /// 닫기 버튼. 그 세션의 말풍선을 지금 상태에 한해 치운다.
     var onClose: (() -> Void)?
+    /// 호버가 바뀌면 미리보기가 한 줄에서 두 줄로 펴져 카드 높이가 달라진다. 스택이 다시 쌓아야 한다.
+    var onHoverChange: ((Bool) -> Void)?
     /// 끄면 클릭도 호버도 받지 않는다. 겹쳐 쌓았을 때 뒤에 깔린 카드가 이렇다.
     var isInteractive = true {
         didSet { if !isInteractive, isHovered { setHovered(false) } }
@@ -54,6 +62,7 @@ final class SessionBubbleView: NSView {
             detailLabel.isHidden = !showsContent
             if !showsContent {
                 badge.isHidden = true
+                previewLabel.isHidden = true
                 closeButton.isHidden = true
                 closeButton.alphaValue = 0
             } else {
@@ -67,6 +76,7 @@ final class SessionBubbleView: NSView {
     private let titleLabel = NSTextField(labelWithString: "")
     private let detailLabel = NSTextField(labelWithString: "")
     private let badge = NSTextField(labelWithString: "")
+    private let previewLabel = NSTextField(labelWithString: "")
     private let closeButton = FirstMouseButton()
     private var tracking: NSTrackingArea?
     private var isHovered = false
@@ -123,6 +133,21 @@ final class SessionBubbleView: NSView {
         badge.isHidden = true
         addSubview(badge)
 
+        previewLabel.font = .systemFont(ofSize: 11, weight: .regular)
+        previewLabel.textColor = .tertiaryLabelColor
+        // "정해진 줄 수까지 감고 마지막 줄만 말줄임" 은 이 셋이 다 있어야 한다.
+        // wraps 로 여러 줄을 허용하고, 줄바꿈은 단어 단위로 두고, 마지막 줄 줄임은
+        // truncatesLastVisibleLine 이 맡는다. lineBreakMode 를 .byTruncatingTail 로 주면
+        // 줄 수와 상관없이 첫 줄에서 잘린다.
+        previewLabel.usesSingleLineMode = false
+        previewLabel.cell?.wraps = true
+        previewLabel.cell?.isScrollable = false
+        previewLabel.cell?.truncatesLastVisibleLine = true
+        previewLabel.lineBreakMode = .byWordWrapping
+        previewLabel.maximumNumberOfLines = 1
+        previewLabel.isHidden = true
+        addSubview(previewLabel)
+
         // macOS 알림처럼 좌상단 모서리에 걸친다. 마우스를 올렸을 때만 보인다.
         closeButton.bezelStyle = .circular
         closeButton.isBordered = false
@@ -145,7 +170,7 @@ final class SessionBubbleView: NSView {
 
     // MARK: 내용
 
-    func update(_ summary: SessionSummary, now: Date) {
+    func update(_ summary: SessionSummary, now: Date, preview: String?) {
         let title = BubbleText.title(for: summary)
         let elapsed = BubbleText.elapsed(now.timeIntervalSince(summary.session.timestamp))
         let detail = "\(BubbleText.detail(for: summary)) · \(elapsed)"
@@ -156,6 +181,10 @@ final class SessionBubbleView: NSView {
         if isCodex, badge.stringValue.isEmpty { badge.stringValue = "Codex" }
         badge.isHidden = !isCodex || !showsContent
         badge.layer?.backgroundColor = NSColor.secondaryLabelColor.withAlphaComponent(0.14).cgColor
+
+        let previewText = preview ?? ""
+        if previewLabel.stringValue != previewText { previewLabel.stringValue = previewText }
+        previewLabel.isHidden = previewText.isEmpty || !showsContent
 
         dot.layer?.backgroundColor = summary.state.accent.cgColor
         isRunning = summary.state == .running
@@ -169,6 +198,15 @@ final class SessionBubbleView: NSView {
     /// 마우스가 올라가 있지 않을 때의 불투명도. 유휴 카드만 낮다.
     private(set) var restingAlpha: CGFloat = 1
 
+    /// 미리보기가 있으면 평소 한 줄, 마우스를 올리면 두 줄. 없으면 0.
+    var previewLines: Int {
+        guard showsContent, previewLabel.stringValue.isEmpty == false else { return 0 }
+        return isHovered ? 2 : 1
+    }
+
+    /// 이 카드가 지금 차지해야 하는 높이.
+    var wantedHeight: CGFloat { Self.height(previewLines: previewLines) }
+
     // MARK: 배치
 
     override func layout() {
@@ -177,9 +215,11 @@ final class SessionBubbleView: NSView {
         layer?.shadowPath = CGPath(roundedRect: bounds, cornerWidth: 14, cornerHeight: 14, transform: nil)
 
         let p = Self.padding
-        dot.frame = NSRect(x: p, y: (bounds.height - Self.dotSize) / 2, width: Self.dotSize, height: Self.dotSize)
-        // 치우는 버튼은 행 끝에 둔다. 자리는 호버 여부와 상관없이 늘 비워 두어 글자가 밀리지 않게 한다.
-        closeButton.frame = NSRect(x: bounds.width - p - Self.closeSize, y: (bounds.height - Self.closeSize) / 2,
+        // 제목 줄은 카드 위쪽에 붙인다. 미리보기가 붙어 카드가 길어져도 제목 자리는 그대로다.
+        let titleY = bounds.height - 22
+        dot.frame = NSRect(x: p, y: titleY + (16 - Self.dotSize) / 2, width: Self.dotSize, height: Self.dotSize)
+        // 치우는 버튼은 제목 줄 끝에 둔다. 자리는 호버 여부와 상관없이 늘 비워 두어 글자가 밀리지 않게 한다.
+        closeButton.frame = NSRect(x: bounds.width - p - Self.closeSize, y: titleY + (16 - Self.closeSize) / 2,
                                    width: Self.closeSize, height: Self.closeSize)
 
         let textX = dot.frame.maxX + 9
@@ -192,10 +232,16 @@ final class SessionBubbleView: NSView {
             badge.sizeToFit()
             let w = badge.frame.width + 8
             titleWidth = min(titleWidth, max(0, textWidth - w - 6))
-            badge.frame = NSRect(x: textX + titleWidth + 6, y: bounds.height / 2 + 3, width: w, height: 13)
+            badge.frame = NSRect(x: textX + titleWidth + 6, y: titleY + 2, width: badge.frame.width + 8, height: 13)
         }
-        titleLabel.frame = NSRect(x: textX, y: bounds.height / 2 + 1, width: titleWidth, height: 16)
-        detailLabel.frame = NSRect(x: textX, y: bounds.height / 2 - 16, width: textWidth, height: 14)
+        titleLabel.frame = NSRect(x: textX, y: titleY, width: titleWidth, height: 16)
+        let detailY = titleY - 17
+        detailLabel.frame = NSRect(x: textX, y: detailY, width: textWidth, height: 14)
+        // 줄 수는 지금 받은 높이에서 뽑는다. 호버 상태로 따로 세면 스택이 정한 높이와 어긋나
+        // 글자가 말줄임표도 없이 잘린다. 높이를 정하는 쪽은 스택 하나뿐이어야 한다.
+        let previewHeight = max(0, detailY - 8)
+        previewLabel.maximumNumberOfLines = max(1, Int((previewHeight / Self.previewLine).rounded()))
+        previewLabel.frame = NSRect(x: textX, y: 6, width: textWidth, height: previewHeight)
     }
 
     // MARK: 호버와 클릭
@@ -235,6 +281,7 @@ final class SessionBubbleView: NSView {
                 self.closeButton.isHidden = true
             }
         }
+        onHoverChange?(hovered)
     }
 
     /// 패널이 nonactivating 이라 모든 클릭이 first mouse 다. 이걸 받지 않으면 클릭이 삼켜진다.

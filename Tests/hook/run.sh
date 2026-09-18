@@ -29,12 +29,15 @@ assert_eq "state running" running "$(field "$f" state)"
 assert_eq "event" PreToolUse "$(field "$f" event)"
 assert_eq "tool" Bash "$(field "$f" tool)"
 assert_eq "cwd first match" /Users/x/proj "$(field "$f" cwd)"
+assert_eq "transcript path" /Users/x/.claude/projects/p/sess-1.jsonl "$(field "$f" transcript)"
 assert_eq "ts numeric" yes "$(grep -q '"ts":[0-9][0-9]*}' "$f" && echo yes || echo no)"
 assert_eq "host_session empty without env" "" "$(field "$f" host_session)"
 assert_eq "single line" 1 "$(wc -l < "$f" | tr -d ' ')"
 
 run permission-request.json
 assert_eq "waiting" waiting "$(field "$CLAUDE_PET_STATE_DIR/sess-2.json" state)"
+# 훅 입력에 transcript_path 가 없으면 빈 값으로 남는다. 앱은 그걸 미리보기 없음으로 읽는다.
+assert_eq "transcript empty when absent" "" "$(field "$CLAUDE_PET_STATE_DIR/sess-2.json" transcript)"
 
 run stop.json
 assert_eq "review" review "$(field "$f" state)"
@@ -42,7 +45,7 @@ assert_eq "review" review "$(field "$f" state)"
 run post-tool-use-failure.json
 f3="$CLAUDE_PET_STATE_DIR/sess-3.json"
 assert_eq "failed" failed "$(field "$f3" state)"
-assert_eq "backslash escaped, json stays valid" yes "$(grep -q '"cwd":"/Users/x/q \\\\","host_session"' "$f3" && echo yes || echo no)"
+assert_eq "backslash escaped, json stays valid" yes "$(grep -q '"cwd":"/Users/x/q \\\\","transcript"' "$f3" && echo yes || echo no)"
 
 run session-end.json
 assert_eq "file removed" no "$([ -f "$f" ] && echo yes || echo no)"
