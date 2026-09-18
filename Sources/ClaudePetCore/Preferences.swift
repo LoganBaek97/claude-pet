@@ -33,6 +33,16 @@ public final class Preferences: @unchecked Sendable {
         set { d.set(newValue, forKey: "isBubbleHidden") }
     }
 
+    /// 시스템 "동작 줄이기" 를 무시하고 펫을 계속 움직인다.
+    ///
+    /// 그 설정은 멀미나 전정기관 문제로 켜는 사람이 있어서 기본은 존중한다.
+    /// 다만 그 설정을 켜 둔 채로 펫만은 움직이길 바라는 사람도 있어서, 본인이 직접 켤 수 있게 둔다.
+    /// 앱이 마음대로 무시하지는 않는다.
+    public var ignoresReducedMotion: Bool {
+        get { d.bool(forKey: "ignoresReducedMotion") }
+        set { d.set(newValue, forKey: "ignoresReducedMotion") }
+    }
+
     public var position: CGPoint? {
         get {
             guard let x = d.object(forKey: "positionX") as? Double, let y = d.object(forKey: "positionY") as? Double else { return nil }

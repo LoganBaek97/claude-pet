@@ -111,6 +111,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         })
 
         controller.isBubbleHidden = prefs.isBubbleHidden
+        controller.ignoresReducedMotion = prefs.ignoresReducedMotion
         loadSelectedPet()
 
         watcher = StateWatcher(store: StateStore(directory: Paths.stateDirectory)) { [weak self] agg in
@@ -133,6 +134,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         DistributedNotificationCenter.default().addObserver(forName: Preferences.changedNotification, object: nil, queue: .main) { [weak self] _ in
             guard let self else { return }
             self.controller.isBubbleHidden = self.prefs.isBubbleHidden
+            self.controller.ignoresReducedMotion = self.prefs.ignoresReducedMotion
             self.loadSelectedPet(); self.layout()
         }
         promptForHooksIfNeeded()
@@ -178,6 +180,8 @@ extension AppDelegate: StatusMenuDelegate {
     var currentPetId: String? { controller.pet?.id }
     var scale: Double { prefs.scale }
     var isLoginItemEnabled: Bool { SMAppService.mainApp.status == .enabled }
+    var isReducedMotionOn: Bool { PetController.systemReducedMotion }
+    var ignoresReducedMotion: Bool { prefs.ignoresReducedMotion }
     var hookStatus: [(agent: Agent, installed: Bool)] {
         Agent.installTargets().map { ($0, HooksInstaller.isInstalled(file: $0.settingsFile)) }
     }
@@ -207,6 +211,13 @@ extension AppDelegate: StatusMenuDelegate {
     }
 
     func setScale(_ s: Double) { prefs.scale = s; layout() }
+
+    /// 시스템 설정은 기본으로 존중한다. 그 설정을 켜 둔 채로 펫만은 움직이길 바라는 사람이
+    /// 직접 켠다. 앱이 마음대로 무시하지 않는다.
+    func toggleIgnoreReducedMotion() {
+        prefs.ignoresReducedMotion.toggle()
+        controller.ignoresReducedMotion = prefs.ignoresReducedMotion
+    }
 
     func toggleLoginItem() {
         do {

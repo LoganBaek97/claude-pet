@@ -38,3 +38,20 @@ final class PreferencesTests: XCTestCase {
         XCTAssertEqual(p.scale, 0.35)
     }
 }
+
+// MARK: 동작 줄이기 무시
+
+extension PreferencesTests {
+    /// 기본은 시스템 설정을 존중한다. 앱이 마음대로 무시하지 않는다.
+    func testIgnoresReducedMotionDefaultsToOff() {
+        XCTAssertFalse(fresh().ignoresReducedMotion)
+    }
+
+    func testIgnoresReducedMotionRoundTrips() {
+        let p = fresh()
+        p.ignoresReducedMotion = true
+        XCTAssertTrue(p.ignoresReducedMotion)
+        p.ignoresReducedMotion = false
+        XCTAssertFalse(p.ignoresReducedMotion)
+    }
+}

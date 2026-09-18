@@ -244,23 +244,30 @@ extension DragTrackerTests {
 // MARK: 놓은 뒤 상태로 제대로 돌아오는가
 
 extension AnimationDirectorHoldTests {
-    /// 실제로 겪은 결함. 작업 중인 세션을 끌었다 놓으면 펫이 중립으로 남아 있었다.
-    /// 상태 행은 세 번 돌면 idle 로 가라앉는데, 놓을 때 그 횟수를 비우지 않아서
-    /// 이미 가라앉은 세션은 끌어도 다시 살아나지 않았다.
+    /// 가라앉을 때까지 돌린다. 이어지는 상태는 가라앉지 않으므로 넣으면 안 된다.
+    private func settle(_ d: AnimationDirector, _ state: PetState) {
+        var guardCount = 0
+        while d.current.row == SpriteRow.base(for: state), guardCount < 500 {
+            _ = d.advance(); guardCount += 1
+        }
+        XCTAssertEqual(d.current.row, .idle, "\(state) 는 가라앉아야 한다")
+    }
+
+    /// 실제로 겪은 결함. 끌었다 놓으면 펫이 중립으로 남아 있었다. 상태 행이 가라앉은 뒤
+    /// 놓을 때 재생 횟수를 비우지 않아서, 끌어도 그 상태를 다시 알리지 않았다.
     func testReleasingRestartsTheStateBurst() {
-        let d = director(.running)
-        while d.current.row == .running { _ = d.advance() }
-        XCTAssertEqual(d.current.row, .idle, "가라앉았다")
+        let d = director(.review)
+        settle(d, .review)
 
         d.hold(.runningRight)
         d.hold(nil)
-        XCTAssertEqual(d.current.row, .running, "놓았으면 작업 중인 걸 다시 보여 줘야 한다")
+        XCTAssertEqual(d.current.row, .review, "놓았으면 그 상태를 다시 보여 줘야 한다")
     }
 
     /// 붙잡는 것만으로 재생 횟수가 비면 안 된다. 놓을 때만 다시 시작한다.
     func testHoldingDoesNotRestartTheBurstByItself() {
-        let d = director(.running)
-        while d.current.row == .running { _ = d.advance() }
+        let d = director(.review)
+        settle(d, .review)
         d.hold(.runningRight)
         XCTAssertEqual(d.current.row, .runningRight)
     }

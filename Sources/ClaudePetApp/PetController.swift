@@ -50,10 +50,20 @@ final class PetController {
 
     deinit { observers.forEach { NSWorkspace.shared.notificationCenter.removeObserver($0) } }
 
-    private static var systemReducedMotion: Bool { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
+    static var systemReducedMotion: Bool { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
+
+    /// 켜면 시스템 "동작 줄이기" 를 무시하고 계속 움직인다. 사용자가 메뉴에서 직접 켠다.
+    var ignoresReducedMotion = false {
+        didSet {
+            guard ignoresReducedMotion != oldValue else { return }
+            applyReducedMotion()
+            render(director.current)
+            scheduleNext()
+        }
+    }
 
     private func applyReducedMotion() {
-        let reduced = Self.systemReducedMotion
+        let reduced = Self.systemReducedMotion && !ignoresReducedMotion
         director.reducedMotion = reduced
         stack.reducedMotion = reduced
     }

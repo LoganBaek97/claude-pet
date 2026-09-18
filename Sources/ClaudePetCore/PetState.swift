@@ -5,6 +5,15 @@ public enum PetState: String, Codable, CaseIterable, Sendable {
     case idle, review, running, failed, waiting
 
     public var priority: Int { PetState.allCases.firstIndex(of: self)! }
+
+    /// 지금 벌어지고 있는 일인가. 이런 상태는 애니메이션이 가라앉지 않고 그 상태인 동안 계속 돈다.
+    /// 끝난 일(끝남·실패)은 몇 번 알리고 조용해진다. 화면이 계속 움직이면 피곤하다.
+    public var isOngoing: Bool {
+        switch self {
+        case .running, .waiting: return true
+        case .idle, .review, .failed: return false
+        }
+    }
 }
 
 public enum EventOutcome: Equatable, Sendable {

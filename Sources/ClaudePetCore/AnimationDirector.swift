@@ -9,8 +9,9 @@ public struct AnimationFrame: Equatable, Sendable {
 /// 합성 상태와 일회성 연출을 시트 행과 프레임 번호로 바꾼다. 타이머는 모른다. 프레임마다 `currentDurationMs` 를 돌려주고
 /// 호출자가 그 시간 뒤에 `advance()` 를 부른다. 스레드 안전하지 않다. 메인 스레드에서만 쓴다.
 ///
-/// 재생 규칙은 Codex 와 같다. 비-idle 상태의 행은 `burstPlays` 회 재생한 뒤 느린 idle 로 가라앉아 거기서 무한 루프하고,
-/// idle 상태는 처음부터 느린 idle 을 돈다. 지속 상태는 말풍선 텍스트가 나르고 애니메이션은 "무언가 일어났다"는 짧은 신호다.
+/// 지금 벌어지는 일(작업 중·입력 대기)은 그 상태인 동안 계속 돈다. 펫만 보고도 돌아가는지 알 수 있어야 한다.
+/// 이미 끝난 일(끝남·실패)은 `burstPlays` 회 알리고 느린 idle 로 가라앉아 거기서 무한 루프한다.
+/// idle 상태는 처음부터 느린 idle 을 돈다.
 public final class AnimationDirector {
     public static let burstPlays = 3
     /// 가라앉은 idle 은 원속도의 1/6 로 돈다(Codex `Ylo`). 한 사이클 6.6초.
@@ -50,7 +51,13 @@ public final class AnimationDirector {
         return held == nil && oneShots.isEmpty && isSettled ? ms * Self.settledIdleSlowdown : ms
     }
 
-    private var isSettled: Bool { state == .idle || playsDone >= Self.burstPlays }
+    /// 가라앉았는가. 이어지는 상태(작업 중·입력 대기)는 가라앉지 않는다.
+    /// 지금 돌아가고 있는지를 펫만 보고도 알 수 있어야 한다.
+    private var isSettled: Bool {
+        if state == .idle { return true }
+        guard !state.isOngoing else { return false }
+        return playsDone >= Self.burstPlays
+    }
 
     private var activeRow: SpriteRow {
         if reducedMotion { return baseRow }

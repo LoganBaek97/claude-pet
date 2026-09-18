@@ -130,6 +130,8 @@ Codex는 관리되지 않는 훅을 사용자가 `/hooks`에서 신뢰하기 전
 
 끌려가는 동안에는 상태 행과 일회성 연출을 모두 제치고 방향에 맞는 행을 계속 돌린다. 가로로 더 움직이면 run-right/run-left, 세로로 더 움직이면 jumping(시트에 떨어지는 행이 없어 위아래를 하나로 묶는다). 손이 멈추면(0.2초간 이벤트 없음) 놓고 평소 상태로 돌아간다. 방향은 직전 이벤트로부터의 이동량을 모아서 정한다. 되돌아올 때 펫도 따라 돌아서야 하므로 시작점부터의 거리는 쓰지 않고, 이벤트 하나가 문턱값(2pt)에 못 미쳐도 멈춘 것으로 보지 않고 넘을 때까지 모은다. 이벤트마다 판단하면 천천히 끌 때 달리기가 내려갔다 올라오기를 반복해 끊겨 보인다.
 
+가라앉는 규칙: 지금 벌어지는 일(작업 중, 입력 대기)은 그 상태인 동안 계속 돈다. 재생 횟수로 멈추지 않는다. 펫만 보고도 돌아가는지 알 수 있어야 하기 때문이다. 조용해졌는지는 합성이 시간으로 판단한다(`runningStaleAfter` 5분이 지나면 idle). 이미 끝난 일(끝남, 실패)만 3회 알리고 느린 idle 로 가라앉는다.
+
 프레임 속도 10fps. 행별 프레임 수는 Codex 규약(idle 6, running-right 8, running-left 8, waving 4, jumping 5, failed 8, waiting 6, running 6, review 6)을 기본으로 하되, 시트를 로드할 때 각 행에서 완전 투명한 셀은 빈 프레임으로 제외한다.
 
 ### 펫 포맷 (`ClaudePetCore.PetManifest`, `SpriteSheet`)
@@ -154,6 +156,7 @@ Codex v1 포맷 그대로.
 - `Info.plist`에 `LSUIElement = YES`.
 - 기본 위치: 주 화면 `visibleFrame` 우하단에서 16pt 안쪽. 드래그로 이동 가능하며 위치는 `UserDefaults`에 저장한다. 화면 구성이 바뀌어 저장 위치가 어느 화면에도 없으면 기본 위치로 되돌린다.
 - 표시 배율: 0.5(기본, 96×104pt), 1.0, 0.35 중 선택.
+- 시스템 "동작 줄이기"를 기본으로 존중한다. 멀미나 전정기관 문제로 켜는 설정이라 앱이 마음대로 무시하지 않는다. 다만 그 설정을 켜 둔 채로 펫만은 움직이길 바라는 사람을 위해 메뉴에 "동작 줄이기 무시하고 움직이기"를 둔다. 기본은 꺼짐이고, 시스템 설정이 켜져 있을 때만 메뉴에 나온다.
 - 렌더링: `CALayer.contents`에 `CGImage` 교체. `magnificationFilter = .nearest`, `minificationFilter = .nearest`.
 - 클릭 통과: 기본 `ignoresMouseEvents = true`. `NSEvent.addGlobalMonitorForEvents(.mouseMoved)`로 커서가 펫 사각형 안에 들어오면 `false`, 나가면 `true`.
 - 마우스 이벤트: 좌클릭은 세션 이동, 우클릭은 메뉴, 드래그는 이동.

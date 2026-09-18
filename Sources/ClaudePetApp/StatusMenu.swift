@@ -9,6 +9,9 @@ protocol StatusMenuDelegate: AnyObject {
     var currentPetId: String? { get }
     var scale: Double { get }
     var isLoginItemEnabled: Bool { get }
+    /// 시스템 "동작 줄이기" 가 켜져 있는가. 켜져 있을 때만 무시 항목을 보여 준다.
+    var isReducedMotionOn: Bool { get }
+    var ignoresReducedMotion: Bool { get }
     /// 이 컴퓨터에서 쓰는 에이전트마다 훅 설치 여부. 메뉴에 한 줄씩 나온다.
     var hookStatus: [(agent: Agent, installed: Bool)] { get }
     var warning: String? { get }
@@ -17,6 +20,7 @@ protocol StatusMenuDelegate: AnyObject {
     func selectPet(id: String)
     func setScale(_ s: Double)
     func toggleLoginItem()
+    func toggleIgnoreReducedMotion()
     func installHooks(agent: Agent)
     func downloadDefaultPet()
     func refresh()
@@ -77,6 +81,12 @@ final class StatusMenu: NSObject, NSMenuDelegate {
 
         let login = make("로그인 시 실행", #selector(toggleLoginItem)); login.state = d.isLoginItemEnabled ? .on : .off
         menu.addItem(login)
+        // 시스템 설정을 켜 둔 사람에게만 보여 준다. 평소에는 있을 이유가 없는 항목이다.
+        if d.isReducedMotionOn {
+            let i = make("동작 줄이기 무시하고 움직이기", #selector(toggleIgnoreReducedMotion))
+            i.state = d.ignoresReducedMotion ? .on : .off
+            menu.addItem(i)
+        }
         for (agent, installed) in d.hookStatus {
             if installed {
                 let i = NSMenuItem(title: "\(agent.displayName) 훅: 설치됨", action: nil, keyEquivalent: ""); i.isEnabled = false; menu.addItem(i)
@@ -101,6 +111,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
     @objc private func selectPet(_ sender: NSMenuItem) { if let id = sender.representedObject as? String { delegate?.selectPet(id: id) } }
     @objc private func setScale(_ sender: NSMenuItem) { if let s = sender.representedObject as? Double { delegate?.setScale(s) } }
     @objc private func toggleLoginItem() { delegate?.toggleLoginItem() }
+    @objc private func toggleIgnoreReducedMotion() { delegate?.toggleIgnoreReducedMotion() }
     @objc private func installHooks(_ sender: NSMenuItem) {
         if let raw = sender.representedObject as? String, let agent = Agent(rawValue: raw) { delegate?.installHooks(agent: agent) }
     }

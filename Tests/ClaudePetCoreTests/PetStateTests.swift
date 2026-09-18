@@ -48,3 +48,16 @@ final class PetStateTests: XCTestCase {
         XCTAssertEqual(s.projectName, "")
     }
 }
+
+// MARK: 이어지는 상태와 끝난 상태
+
+extension PetStateTests {
+    /// 지금 벌어지는 일은 계속 보여야 하고, 끝난 일은 몇 번 알리고 조용해지면 된다.
+    func testOngoingStates() {
+        XCTAssertTrue(PetState.running.isOngoing)
+        XCTAssertTrue(PetState.waiting.isOngoing)
+        XCTAssertFalse(PetState.review.isOngoing, "끝난 일")
+        XCTAssertFalse(PetState.failed.isOngoing, "끝난 일")
+        XCTAssertFalse(PetState.idle.isOngoing)
+    }
+}
