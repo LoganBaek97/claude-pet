@@ -311,7 +311,7 @@ let app = App()
 app.run()
 
 var msg = MSG()
-while GetMessageW(&msg, nil, 0, 0) != 0 {
+while GetMessageW(&msg, nil, 0, 0) { // BOOL 은 Swift 에서 Bool
     TranslateMessage(&msg)
     DispatchMessageW(&msg)
 }

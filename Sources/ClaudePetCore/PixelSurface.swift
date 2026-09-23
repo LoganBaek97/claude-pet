@@ -6,7 +6,7 @@ public struct PixelSurface: Equatable, Sendable {
     public let width: Int
     public let height: Int
     /// BGRA8, 프리멀티플라이드 알파, 행 우선, 맨 윗줄부터(top-down). count == width * height * 4.
-    public private(set) var pixels: [UInt8]
+    public var pixels: [UInt8]
 
     public init(width: Int, height: Int) {
         self.width = width

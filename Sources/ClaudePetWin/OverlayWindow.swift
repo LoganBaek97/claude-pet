@@ -245,7 +245,7 @@ final class OverlayWindow {
 private let overlayWndProc: WNDPROC = { hwnd, msg, wParam, lParam in
     guard let hwnd else { return DefWindowProcW(hwnd, msg, wParam, lParam) }
     let raw = GetWindowLongPtrW(hwnd, GWLP_USERDATA)
-    guard raw != 0, let ptr = UnsafeMutableRawPointer(bitPattern: UInt(bitPattern: raw)) else {
+    guard raw != 0, let ptr = UnsafeMutableRawPointer(bitPattern: Int(raw)) else { // LONG_PTR 은 Int64
         return DefWindowProcW(hwnd, msg, wParam, lParam)
     }
     let app = Unmanaged<App>.fromOpaque(ptr).takeUnretainedValue()

@@ -27,7 +27,7 @@ final class PetController {
     var onRender: (() -> Void)?
 
     /// 오버레이 창 핸들. 타이머를 거는 데 쓴다.
-    weak var overlayHwnd: UnsafeMutableRawPointer? // HWND 를 약하게 들 수 없으므로 raw pointer 로 둔다
+    var overlayHwnd: UnsafeMutableRawPointer? // HWND. 창이 컨트롤러보다 오래 산다
 
     var isBubbleHidden = false {
         didSet {

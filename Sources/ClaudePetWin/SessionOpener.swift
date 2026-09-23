@@ -53,7 +53,7 @@ enum SessionOpener {
                 withUnsafeMutablePointer(to: &ctx) { ctxPtr in
                     EnumWindows({ hwnd, lParam -> WindowsBool in
                         guard let hwnd, lParam != 0 else { return true }
-                        let ctx = UnsafeMutablePointer<EnumCtx>(OpaquePointer(bitPattern: UInt(bitPattern: lParam))!)
+                        let ctx = UnsafeMutablePointer<EnumCtx>(bitPattern: Int(lParam))! // LPARAM 은 Int64
                         var wPid: DWORD = 0
                         GetWindowThreadProcessId(hwnd, &wPid)
                         guard wPid == ctx.pointee.targetPid else { return true }
