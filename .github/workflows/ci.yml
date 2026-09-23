@@ -45,3 +45,7 @@ jobs:
         if: always()
         shell: pwsh
         run: pwsh Tests/hook/run.ps1
+      - name: App self-test
+        env:
+          CLAUDE_PET_STATE_DIR: ${{ runner.temp }}/claude-pet-state
+        run: swift run ClaudePetWin --self-test
