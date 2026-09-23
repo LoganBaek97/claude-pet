@@ -1,7 +1,7 @@
 # claude-pet 설계
 
-작성일: 2026-09-15 (2026-09-17 Codex 지원 추가)
-대상: macOS 26, Claude Desktop(Code 탭)과 Claude Code CLI, Codex(CLI·IDE 확장·데스크톱 앱)
+작성일: 2026-09-15 (2026-09-17 Codex 지원 추가, 2026-09-23 Windows 지원 추가)
+대상: macOS 26 과 Windows 10/11, Claude Desktop(Code 탭)과 Claude Code CLI, Codex(CLI·IDE 확장·데스크톱 앱)
 
 ## 목적
 
@@ -24,7 +24,7 @@ v1에 포함:
 v1에서 제외:
 
 - 펫 생성(hatch, 이미지 생성)
-- Windows, Linux
+- Linux, WSL 안의 에이전트 (Windows 네이티브는 아래 "Windows" 절)
 - 세션마다 펫 여러 마리
 - 코드 서명, 공증, 배포 패키징
 
@@ -215,6 +215,21 @@ Codex 세션이면 위 문구 앞에 `Codex · `를 붙인다. Claude는 기본�
 1. 설치 대상 에이전트 중 훅이 빠진 것이 있으면 알림창으로 설치 여부를 묻는다. 예를 누르면 빠진 것만 `install-hooks`와 같은 동작을 한다.
 2. 설치된 펫이 없으면 내장 기본 펫으로 시작하고, 메뉴에 "펫 받기(guga)…" 항목을 보여준다.
 
+## Windows
+
+2026-09-23 추가. 설계 결정과 근거는 다음과 같다.
+
+- **스택**: Swift 를 유지하고 `ClaudePetCore`·CLI·테스트를 공유한다. 앱 레이어만 `Sources/ClaudePetWin` 에 Win32(`import WinSDK`)로 새로 쓴다. 파일 단위 `#if os(macOS)` / `#if os(Windows)` 로 갈라서 어느 OS 에서든 `swift build` 가 전 타깃을 돈다.
+- **훅**: `hook.sh` 는 네이티브 Windows 에서 못 쓴다(MSYS `ps` 는 MSYS 프로세스만 보여 에이전트 pid 를 못 찾고 경로도 다르다). 대신 CLI 의 `claude-pet hook [--agent x]` 서브커맨드가 같은 상태 파일을 쓴다. `HookRunner.decide` 는 순수 함수라 mac 테스트에서 픽스처로 검증한다. 조상 탐색은 `ProcessAncestry`(Windows: Toolhelp32). 에이전트를 양성 식별하지 못하면 `agent_pid` 는 0 으로 남겨 앱이 30분 규칙으로 처리하게 한다. mac 은 v1 에서 `hook.sh` 를 그대로 쓴다.
+- **훅 항목**(`HookCommand`): Claude Code 는 Windows 에서 셸 형태 훅을 Git Bash `sh -c`(없으면 PowerShell)로 돌리므로 경로를 `C:/…` 로 쓰고 `shell` 키로 셸을 고정한다. Codex 는 `commandWindows` 에 PowerShell 문장을 받는다. PowerShell 형은 `[Console]::In.ReadToEnd() | & "…\claude-pet.exe" hook …` 로 stdin 을 명시적으로 넘기고 UTF-8 을 강제한다(PowerShell 5.1 이 파이프를 OEM 코드페이지로 재인코딩해 한글 cwd 가 깨진다). exec 형태(`args`)는 upstream 버그(anthropics/claude-code#90495)로 보류. `isOurs` 는 `command`·`commandWindows` 둘 다 본다.
+- **경로**: `%LOCALAPPDATA%\ClaudePet\{state,pets,preferences.json}`. `.claude`·`.codex` 는 `%USERPROFILE%` 아래. 배포 레이아웃은 `<root>\ClaudePetWin.exe`, `<root>\claude-pet.exe`, `<root>\pets\default\`, 런타임 DLL.
+- **설정**: `PreferencesStore` 프로토콜. mac 은 UserDefaults 그대로, Windows 는 JSON 파일. CLI → 앱 알림은 mac 은 DistributedNotificationCenter, Windows 는 `prefs-changed` 파일 mtime 을 앱이 1초 폴링.
+- **스프라이트**: `SpriteFrame`(RGBA8 premultiplied 버퍼)이 Core 의 프레임 타입. 디코더는 `SpriteDecoder` 프로토콜로 플랫폼이 준다(mac ImageIO, Windows WIC). Windows 11 은 WebP WIC 코덱이 기본이고 Windows 10 은 Store 의 WebP Image Extensions 가 필요하다. 없으면 내장 기본 펫(PNG)으로 대체하고 메뉴에 이유를 적는다.
+- **앱 레이어**: `WS_EX_LAYERED|TOPMOST|TOOLWINDOW|NOACTIVATE` 팝업 창에 premultiplied BGRA DIB 를 `UpdateLayeredWindow`. 알파 0 픽셀은 OS 가 클릭을 통과시킨다. 트레이는 `Shell_NotifyIconW`(TaskbarCreated 재등록), 메뉴는 `TrackPopupMenuEx`. 말풍선은 GDI+ 로 같은 DIB 에 합성. 상태 감시는 1초 폴링. 세션 이동은 `ShellExecuteW("claude://…")` 또는 `EnumWindows` → `SetForegroundWindow`(거부 시 `FlashWindowEx`). 로그인 항목은 HKCU Run 키. 동작 줄이기는 `SPI_GETCLIENTAREAANIMATION`. GUI exe 는 `/SUBSYSTEM:WINDOWS /ENTRY:mainCRTStartup` 으로 링크.
+- **배포**: GitHub Actions windows 러너가 `scripts/bundle-windows.ps1` 로 zip 을 만들어 `v*` 태그에 pre-release 로 붙인다. Swift 런타임 DLL 을 동봉한다. 설치는 `install-windows.ps1`(복사, Mark-of-the-Web 제거, PATH, 훅 설치).
+- **검증**: 실기기가 없다. CI 가 빌드·단위 테스트·훅 통합(`Tests/hook/run.ps1`: 픽스처 직접 입력, 설치기가 만든 명령을 bash·powershell.exe·pwsh 로 실행, 콜드 스타트)을 돌린다. 창·트레이·클릭 이동은 실기기 미검증으로 README 에 명시한다.
+- **알려진 제한**: WSL 미지원, npm 설치 Claude(node.exe)의 생사 판정 불가, GUI 호스트 세션에서 `bash.exe` 콘솔 깜빡임 가능(Claude Code 가 스폰하는 쪽의 문제), 코드 서명 없음.
+
 ## 에러 처리
 
 - 훅: 어떤 실패에도 exit 0. 상태 디렉터리가 없으면 만든다. 쓰기 실패는 무시한다.
@@ -230,11 +245,12 @@ claude-pet/
 │   ├── ClaudePetCore/      순수 로직: StateAggregator, AnimationDirector,
 │   │                        PetManifest, SpriteSheet, HooksInstaller, PetInstaller
 │   ├── ClaudePetApp/       AppKit: OverlayPanel, PetLayerView, SpeechBubble,
-│   │                        StatusMenu, StateWatcher, AppDelegate
-│   └── claude-pet/         CLI 진입점
+│   │                        StatusMenu, StateWatcher, AppDelegate (#if os(macOS))
+│   ├── ClaudePetWin/       Win32: OverlayWindow, TrayIcon, BubbleRenderer, WICDecoder (#if os(Windows))
+│   └── claude-pet/         CLI 진입점 (hook 서브커맨드 포함)
 ├── Tests/
 │   ├── ClaudePetCoreTests/
-│   └── hook/               hook.sh 셸 테스트
+│   └── hook/               hook.sh 셸 테스트(run.sh), Windows 네이티브 훅 통합 테스트(run.ps1)
 ├── hooks/hook.sh
 ├── Resources/
 │   ├── Info.plist
@@ -242,7 +258,10 @@ claude-pet/
 │   └── pets/default/       내장 기본 펫
 ├── scripts/
 │   ├── bundle.sh           swift build 결과를 ClaudePet.app으로 감싼다
-│   └── install.sh          /Applications 복사, CLI 링크, 훅 설치 안내
+│   ├── install.sh          /Applications 복사, CLI 링크, 훅 설치 안내
+│   ├── bundle-windows.ps1  Windows zip (exe, 런타임 DLL, 기본 펫)
+│   └── install-windows.ps1 zip 을 %LOCALAPPDATA%\Programs\ClaudePet 에 설치
+├── .github/workflows/      ci.yml (macOS+Windows), release.yml (Windows zip)
 └── docs/superpowers/specs/
 ```
 
