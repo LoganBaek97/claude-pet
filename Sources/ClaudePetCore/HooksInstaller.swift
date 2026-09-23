@@ -6,28 +6,32 @@ public enum HooksInstallerError: Error, Equatable {
 }
 
 public enum HooksInstaller {
-    public static let marker = "# claude-pet"
+    /// HookCommand.marker 의 별칭. 기존 호출자가 그대로 쓸 수 있도록 유지한다.
+    public static let marker = HookCommand.marker
     static let toolEvents: Set<String> = ["PreToolUse", "PostToolUse", "PostToolUseFailure", "PermissionRequest"]
 
     /// Claude 는 인자 없이, 다른 에이전트는 `--agent <id>` 를 마커 앞에 붙인다.
     /// `#` 뒤는 셸 주석이라 스크립트에 전달되지 않고, 식별용으로만 남는다.
     public static func command(forHookScript script: URL, agent: Agent = .claude) -> String {
         let flag = agent == .claude ? "" : " --agent \(agent.rawValue)"
-        return "\"\(script.path)\"\(flag) \(marker)"
+        return "\"\(script.path)\"\(flag) \(HookCommand.marker)"
     }
 
     static func isOurs(_ hook: [String: Any]) -> Bool {
-        (hook["command"] as? String)?.hasSuffix(marker) == true
+        let cmd = hook["command"] as? String
+        let cmdWin = hook["commandWindows"] as? String
+        return cmd?.hasSuffix(marker) == true || cmdWin?.hasSuffix(marker) == true
     }
 
     static func groupIsOurs(_ group: [String: Any]) -> Bool {
         ((group["hooks"] as? [[String: Any]]) ?? []).contains(where: isOurs)
     }
 
-    // MARK: 순수 변환
+    // MARK: 순수 변환 (플랫폼 인식)
 
     /// `settings["hooks"]` 또는 `hooks[event]` 가 딕셔너리/배열이 아닌 예상 밖 타입이면 조용히 버리지 않고 던진다.
-    public static func install(into settings: [String: Any], hookScript: URL, agent: Agent = .claude) throws -> [String: Any] {
+    /// 기존 우리 항목을 찾으면 딕셔너리 전체를 교체해 낡은 `shell`/`commandWindows` 키가 남지 않게 한다.
+    public static func install(into settings: [String: Any], platform: HookPlatform, agent: Agent = .claude) throws -> [String: Any] {
         var out = settings
         var hooks: [String: Any]
         if let raw = settings["hooks"] {
@@ -36,9 +40,8 @@ public enum HooksInstaller {
         } else {
             hooks = [:]
         }
-        let command = command(forHookScript: hookScript, agent: agent)
         for event in agent.hookedEvents {
-            let entry: [String: Any] = ["type": "command", "command": command, "timeout": agent.timeout(for: event)]
+            let entry = HookCommand.entry(platform: platform, agent: agent, event: event)
             var groups: [[String: Any]]
             if let raw = hooks[event] {
                 guard let arr = raw as? [[String: Any]] else { throw HooksInstallerError.notAnObject }
@@ -77,6 +80,11 @@ public enum HooksInstaller {
         }
         out["hooks"] = hooks
         return out
+    }
+
+    /// 기존 호출자를 위한 macOS 오버로드. `install(into:platform:agent:)` 로 위임한다.
+    public static func install(into settings: [String: Any], hookScript: URL, agent: Agent = .claude) throws -> [String: Any] {
+        try install(into: settings, platform: .macOS(hookScript: hookScript), agent: agent)
     }
 
     public static func uninstall(from settings: [String: Any]) throws -> [String: Any] {
@@ -124,7 +132,7 @@ public enum HooksInstaller {
 
     /// 백업을 만든 뒤에만 쓴다. 파일이 없으면 백업 없이 새로 만든다. 반환값은 백업 경로(없으면 원본 경로).
     @discardableResult
-    public static func installFile(at url: URL, hookScript: URL, agent: Agent = .claude, now: Date) throws -> URL {
+    public static func installFile(at url: URL, platform: HookPlatform, agent: Agent = .claude, now: Date) throws -> URL {
         let settings = try read(url)
         let fm = FileManager.default
         try fm.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -133,8 +141,14 @@ public enum HooksInstaller {
             backup = url.deletingLastPathComponent().appendingPathComponent(backupName(for: url, now: now))
             try fm.copyItem(at: url, to: backup)
         }
-        try write(try install(into: settings, hookScript: hookScript, agent: agent), to: url)
+        try write(try install(into: settings, platform: platform, agent: agent), to: url)
         return backup
+    }
+
+    /// 기존 호출자를 위한 macOS 오버로드. `installFile(at:platform:agent:now:)` 로 위임한다.
+    @discardableResult
+    public static func installFile(at url: URL, hookScript: URL, agent: Agent = .claude, now: Date) throws -> URL {
+        try installFile(at: url, platform: .macOS(hookScript: hookScript), agent: agent, now: now)
     }
 
     @discardableResult
