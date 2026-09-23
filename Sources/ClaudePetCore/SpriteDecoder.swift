@@ -7,6 +7,8 @@ public protocol SpriteDecoder {
 public enum SpriteDecoders {
     #if canImport(ImageIO)
     public static var `default`: SpriteDecoder.Type = ImageIODecoder.self
+    #elseif os(Windows)
+    public static var `default`: SpriteDecoder.Type = WICDecoder.self
     #else
     public static var `default`: SpriteDecoder.Type = UnavailableDecoder.self
     #endif
