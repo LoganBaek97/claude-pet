@@ -8,7 +8,7 @@ extension FileManager {
     /// Windows 의 corelibs Foundation 은 `replaceItemAt` 을 구현하지 않아("not yet implemented")
     /// 파일은 `MoveFileExW(REPLACE_EXISTING)` 으로, 디렉터리는 지우고 옮기는 식으로 처리한다.
     /// macOS 는 `replaceItemAt` 을 그대로 쓴다.
-    func replaceItemAtomically(_ target: URL, with source: URL) throws {
+    public func replaceItemAtomically(_ target: URL, with source: URL) throws {
         var isDir: ObjCBool = false
         let targetExists = fileExists(atPath: target.path, isDirectory: &isDir)
         guard targetExists else {
