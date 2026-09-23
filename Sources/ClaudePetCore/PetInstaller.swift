@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking // Windows·Linux 의 corelibs 는 URLSession 을 여기 둔다
+#endif
 
 public enum PetInstallerError: Error, Equatable {
     case invalidId
