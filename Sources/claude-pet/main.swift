@@ -1,6 +1,8 @@
 import ClaudePetCore
 import Foundation
+#if canImport(ServiceManagement)
 import ServiceManagement
+#endif
 
 let executable = URL(fileURLWithPath: CommandLine.arguments[0]).standardizedFileURL
 let args = Array(CommandLine.arguments.dropFirst())
@@ -110,11 +112,16 @@ case "list":
 
 case "login-item":
     guard args.count == 2, ["on", "off"].contains(args[1]) else { usage() }
+    #if canImport(ServiceManagement)
     guard BundleLayout.appBundle(containing: executable) != nil else { fail("앱 번들 안에서만 동작합니다. scripts/install.sh 로 설치한 뒤 실행하세요.") }
     do {
         if args[1] == "on" { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
         print("로그인 시 실행: \(args[1])")
     } catch { fail("변경 실패: \(error.localizedDescription)") }
+    #else
+    // Windows 는 HKCU Run 키로 등록한다(Phase 2 에서 구현).
+    fail("이 플랫폼에서는 아직 지원하지 않습니다.")
+    #endif
 
 case "status":
     for agent in Agent.allCases {

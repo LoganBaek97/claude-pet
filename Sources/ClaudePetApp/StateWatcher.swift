@@ -1,3 +1,4 @@
+#if os(macOS)
 import ClaudePetCore
 import Foundation
 
@@ -49,3 +50,4 @@ final class StateWatcher {
         }
     }
 }
+#endif

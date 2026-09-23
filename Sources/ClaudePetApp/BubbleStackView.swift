@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 import ClaudePetCore
 
@@ -438,3 +439,4 @@ final class OverflowPill: NSView {
     /// 알약은 장식이다. 클릭이 밑으로 통과해야 한다.
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }
+#endif

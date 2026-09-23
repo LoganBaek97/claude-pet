@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 
 /// 50ms 마다 마우스가 펫이나 말풍선 위에 있는지 보고 `ignoresMouseEvents` 를 토글한다.
@@ -40,3 +41,4 @@ final class HoverTracker {
         }
     }
 }
+#endif

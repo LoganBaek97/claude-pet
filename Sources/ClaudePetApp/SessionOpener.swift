@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 import ClaudePetCore
 
@@ -50,3 +51,4 @@ enum SessionOpener {
         return true
     }
 }
+#endif

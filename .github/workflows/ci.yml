@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main, windows-support]
+  pull_request:
+
+jobs:
+  macos:
+    name: macOS
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: swift build
+      - name: Unit tests
+        run: swift test
+      - name: Hook shell tests
+        run: sh Tests/hook/run.sh
+      - name: Bundle app
+        run: CLAUDE_PET_UNIVERSAL=0 sh scripts/bundle.sh debug
+
+  windows:
+    name: Windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      # 릴리스 태그로 고정한다. @main 은 입력 이름이 바뀌어 깨진 적이 있다.
+      - uses: compnerd/gha-setup-swift@v0.5.0
+        with:
+          swift-version: swift-6.2.3-release
+          swift-build: 6.2.3-RELEASE
+      - name: Toolchain
+        run: swift --version
+      - name: Build
+        run: swift build -v
+      - name: Unit tests
+        run: swift test
+      # Phase 0 게이트: WinSDK 링크와 Foundation 파일 동작. 창 생성 성공 여부는 로그로만 남는다.
+      - name: Spike (layered window, tray, Foundation facts)
+        run: swift run ClaudePetWin --spike

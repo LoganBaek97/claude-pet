@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 import ClaudePetCore
 import ServiceManagement
@@ -275,3 +276,4 @@ extension AppDelegate: StatusMenuDelegate {
         NSApp.activate(ignoringOtherApps: true); a.runModal()
     }
 }
+#endif
