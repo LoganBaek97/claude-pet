@@ -22,6 +22,7 @@ function Assert-Eq($name, $expected, $actual) {
 }
 function New-StateDir { $d = Join-Path ([IO.Path]::GetTempPath()) ("claude-pet-hook-" + [Guid]::NewGuid()); New-Item -ItemType Directory -Path $d | Out-Null; $d }
 function Read-State($dir, $id) { Get-Content -Raw -Encoding UTF8 (Join-Path $dir "$id.json") | ConvertFrom-Json }
+function Fixture-Id($name) { (Get-Content -Raw -Encoding UTF8 (Join-Path $fix $name) | ConvertFrom-Json).session_id }
 # stdin 을 파이프로 주는 방식은 Claude Code 가 훅을 띄우는 방식과 같다. cmd 의 리다이렉션을 써서
 # PowerShell 의 파이프 인코딩 층을 끼우지 않는다.
 function Invoke-WithStdin([string]$commandLine, [string]$fixture) {
@@ -47,7 +48,7 @@ Assert-Eq "host_session empty" "" $s.host_session
 Assert-Eq "agent_pid is number" $true ($s.agent_pid -is [long] -or $s.agent_pid -is [int])
 
 Assert-Eq "exit0 permission-request" 0 (Invoke-WithStdin "`"$exe`" hook" (Join-Path $fix "permission-request.json"))
-Assert-Eq "state waiting" "waiting" (Read-State $state "sess-1").state
+Assert-Eq "state waiting" "waiting" (Read-State $state (Fixture-Id "permission-request.json")).state
 
 Assert-Eq "exit0 hangul" 0 (Invoke-WithStdin "`"$exe`" hook" (Join-Path $fix "pre-tool-use-hangul.json"))
 $h = Get-Content -Raw -Encoding UTF8 (Join-Path $fix "pre-tool-use-hangul.json") | ConvertFrom-Json
@@ -62,15 +63,18 @@ Assert-Eq "interrupt idle" "idle" $c.state
 
 $env:CLAUDE_CODE_HOST_SESSION_ID = "local_abc-123"
 Assert-Eq "exit0 host session" 0 (Invoke-WithStdin "`"$exe`" hook" (Join-Path $fix "stop.json"))
-Assert-Eq "host_session kept" "local_abc-123" (Read-State $state "sess-1").host_session
+Assert-Eq "host_session kept" "local_abc-123" (Read-State $state (Fixture-Id "stop.json")).host_session
 Remove-Item Env:CLAUDE_CODE_HOST_SESSION_ID
 
 Assert-Eq "exit0 session-end" 0 (Invoke-WithStdin "`"$exe`" hook" (Join-Path $fix "session-end.json"))
-Assert-Eq "session-end removes" $false (Test-Path (Join-Path $state "sess-1.json"))
+Assert-Eq "session-end removes" $false (Test-Path (Join-Path $state "$(Fixture-Id 'session-end.json').json"))
 
 Assert-Eq "exit0 no-session" 0 (Invoke-WithStdin "`"$exe`" hook" (Join-Path $fix "no-session.json"))
 Assert-Eq "exit0 unknown-event" 0 (Invoke-WithStdin "`"$exe`" hook" (Join-Path $fix "unknown-event.json"))
-Assert-Eq "no stray files" 2 ((Get-ChildItem $state -Filter *.json).Count)   # hangul + codex-1
+# 남는 파일: session-end 가 지운 것을 뺀 나머지 세션들.
+$expectedIds = @("pre-tool-use.json", "permission-request.json", "pre-tool-use-hangul.json", "codex-interrupt.json", "stop.json") |
+    ForEach-Object { Fixture-Id $_ } | Where-Object { $_ -ne (Fixture-Id "session-end.json") } | Sort-Object -Unique
+Assert-Eq "no stray files" $expectedIds.Count ((Get-ChildItem $state -Filter *.json).Count)
 
 # ---------- 2. 설치기가 만든 명령을 실제 셸로 ----------
 $home2 = New-StateDir
