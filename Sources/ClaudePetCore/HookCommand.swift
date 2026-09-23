@@ -15,8 +15,14 @@ public enum HookCommand {
     public static let marker = "# claude-pet"
 
     /// C:\a\b → C:/a/b (Windows 경로만; POSIX 경로는 그대로).
+    /// corelibs 의 `URL.path` 가 드라이브 앞에 `/` 를 붙여 `/C:/…` 로 주는 경우도 걷어 낸다.
     static func forwardSlashed(_ path: String) -> String {
-        path.replacingOccurrences(of: "\\", with: "/")
+        var p = path.replacingOccurrences(of: "\\", with: "/")
+        if p.count >= 3, p.hasPrefix("/"), p[p.index(p.startIndex, offsetBy: 2)] == ":",
+           p[p.index(after: p.startIndex)].isLetter {
+            p.removeFirst()
+        }
+        return p
     }
 
     /// sh 형: `"C:/…/claude-pet.exe" hook[ --agent codex] # claude-pet`

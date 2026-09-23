@@ -180,4 +180,9 @@ final class HookCommandTests: XCTestCase {
             XCTAssertTrue(cmd.contains("/New/claude-pet.exe"), "event \(event): new exe path expected in: \(cmd)")
         }
     }
+
+    func testForwardSlashedDropsLeadingSlashBeforeDriveLetter() {
+        XCTAssertEqual(HookCommand.forwardSlashed("/C:/Users/x/claude-pet.exe"), "C:/Users/x/claude-pet.exe")
+        XCTAssertEqual(HookCommand.forwardSlashed("/usr/local/bin/x"), "/usr/local/bin/x")
+    }
 }
