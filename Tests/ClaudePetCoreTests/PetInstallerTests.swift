@@ -17,9 +17,11 @@ final class PetInstallerTests: XCTestCase {
         try FileManager.default.createDirectory(at: inner, withIntermediateDirectories: true)
         try #"{"id":"\#(id)","displayName":"G","description":"d","spritesheetPath":"\#(sheetName)"}"#
             .write(to: inner.appendingPathComponent("pet.json"), atomically: true, encoding: .utf8)
-        let image = validSheet ? TestImages.sheet(filledCells: [6, 8, 8, 4, 5, 8, 6, 6, 6])
-                               : TestImages.sheet(filledCells: [], width: 10, height: 10)
-        TestImages.writePNG(image, to: inner.appendingPathComponent(sheetName))
+        // 체크인한 픽스처 PNG 를 쓴다. CoreGraphics 없이도(Windows) 테스트가 돌아야 한다.
+        // sheet-v1.png 는 filledCells [6, 8, 8, 4, 5, 8, 6, 6, 6], sheet-invalid.png 는 10×10.
+        let fixtures = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("Fixtures")
+        let source = fixtures.appendingPathComponent(validSheet ? "sheet-v1.png" : "sheet-invalid.png")
+        try FileManager.default.copyItem(at: source, to: inner.appendingPathComponent(sheetName))
         let zip = root.appendingPathComponent("\(UUID().uuidString).zip")
         let p = Process()
 #if os(Windows)
