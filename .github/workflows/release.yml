@@ -1,0 +1,35 @@
+name: Release (Windows)
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    name: Windows zip
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: compnerd/gha-setup-swift@v0.5.0
+        with:
+          swift-version: swift-6.2.3-release
+          swift-build: 6.2.3-RELEASE
+      - name: Bundle
+        run: powershell -ExecutionPolicy Bypass -File scripts/bundle-windows.ps1
+      - name: Check zip contents
+        shell: pwsh
+        run: |
+          $list = (Expand-Archive -PassThru -Path dist/ClaudePet-windows-x64.zip -DestinationPath dist/check).Name
+          foreach ($need in "ClaudePetWin.exe", "claude-pet.exe", "install-windows.ps1", "pet.json") {
+            if ($list -notcontains $need) { throw "zip 에 $need 가 없습니다" }
+          }
+          if (-not ($list | Where-Object { $_ -like "*.dll" })) { Write-Warning "zip 에 런타임 DLL 이 없습니다" }
+      # Windows 사용자가 오버레이 동작을 확인해 주기 전까지 pre-release 로 둔다.
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/ClaudePet-windows-x64.zip
+          prerelease: true
+          generate_release_notes: true
