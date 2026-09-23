@@ -68,8 +68,8 @@ public struct WindowsProcessAncestry: ProcessAncestry {
         // PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
         guard let handle = OpenProcess(0x1000, false, pid) else { return nil }
         defer { CloseHandle(handle) }
-        var size = DWORD(260)
-        var buffer = [WCHAR](repeating: 0, count: 261)
+        var size = DWORD(32768)
+        var buffer = [WCHAR](repeating: 0, count: Int(size))
         guard QueryFullProcessImageNameW(handle, 0, &buffer, &size), size > 0 else { return nil }
         return buffer.withUnsafeBufferPointer { ptr in
             String(decodingCString: ptr.baseAddress!, as: UTF16.self)

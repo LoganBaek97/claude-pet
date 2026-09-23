@@ -60,10 +60,23 @@ guard let command = args.first else { usage() }
 switch command {
 case "install-hooks":
     do {
+        #if os(Windows)
+        // Windows 는 셸 스크립트 대신 이 실행 파일의 `hook` 서브커맨드를 건다. Claude Code 가 훅을 어떤 셸로
+        // 돌릴지는 Git Bash 유무로 정해지므로 같은 순서로 찾아 항목의 shell 을 맞춘다.
+        let hookExe = BundleLayout.hookExecutable(executable: executable)
+        guard FileManager.default.fileExists(atPath: hookExe.path) else { fail("훅 실행 파일이 없습니다: \(hookExe.path)") }
+        let shell = GitBash.claudeShell()
+        let platform = HookPlatform.windows(hookExecutable: hookExe, claudeShell: shell)
+        if shell == .powershell {
+            print("Git Bash 를 찾지 못해 Claude Code 훅을 PowerShell 로 겁니다. Claude Code 가 Git Bash 를 쓰는 기계라면 Git for Windows 를 설치한 뒤 다시 실행하세요.")
+        }
+        #else
         let script = BundleLayout.hookScript(executable: executable)
         guard FileManager.default.fileExists(atPath: script.path) else { fail("훅 스크립트가 없습니다: \(script.path)") }
+        let platform = HookPlatform.macOS(hookScript: script)
+        #endif
         for agent in hookTargets() {
-            let backup = try HooksInstaller.installFile(at: agent.settingsFile, hookScript: script, agent: agent, now: Date())
+            let backup = try HooksInstaller.installFile(at: agent.settingsFile, platform: platform, agent: agent, now: Date())
             print("\(agent.displayName) 훅을 설치했습니다. 백업: \(backup.path)")
             if let note = agent.postInstallNote { print("  → \(note)") }
         }
@@ -119,9 +132,16 @@ case "login-item":
         if args[1] == "on" { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
         print("로그인 시 실행: \(args[1])")
     } catch { fail("변경 실패: \(error.localizedDescription)") }
+    #elseif os(Windows)
+    // HKCU Run 키. 앱 exe 는 CLI 옆에 있어야 한다.
+    let appExe = executable.deletingLastPathComponent().appendingPathComponent("ClaudePetWin.exe")
+    guard FileManager.default.fileExists(atPath: appExe.path) else { fail("ClaudePetWin.exe 가 CLI 옆에 없습니다: \(appExe.path)") }
+    do {
+        if args[1] == "on" { try LoginItem.enable(appExecutable: appExe) } else { try LoginItem.disable() }
+        print("로그인 시 실행: \(args[1])")
+    } catch { fail("변경 실패: 레지스트리를 쓸 수 없습니다") }
     #else
-    // Windows 는 HKCU Run 키로 등록한다(Phase 2 에서 구현).
-    fail("이 플랫폼에서는 아직 지원하지 않습니다.")
+    fail("이 플랫폼에서는 지원하지 않습니다.")
     #endif
 
 case "status":

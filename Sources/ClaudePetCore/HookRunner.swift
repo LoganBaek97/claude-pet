@@ -50,16 +50,13 @@ public struct HostAppRule: @unchecked Sendable {
 
     /// Windows: 거부 목록에 없는 가장 바깥 조상 → exe 전체 경로.
     public static let windows: HostAppRule = {
+        // 셸·콘솔 호스트·에이전트 자신·시스템 프로세스는 호스트 앱이 아니다. 소문자로 비교한다.
         let deny: Set<String> = [
-            "bash", "sh", "cmd", "powershell", "pwsh", "conhost", "OpenConsole",
-            "claude", "codex", "node", "explorer", "svchost", "services",
-            "wininit", "System",
+            "bash", "sh", "cmd", "powershell", "pwsh", "conhost", "openconsole",
+            "claude", "codex", "node", "explorer", "svchost", "services", "wininit", "system",
         ]
         return HostAppRule(
-            matches: { path in
-                let name = URL(fileURLWithPath: path).deletingPathExtension().lastPathComponent
-                return !deny.contains(name) && !deny.contains(name.lowercased())
-            },
+            matches: { path in !deny.contains(ProcessProbe.baseName(path)) },
             extractApp: { $0 }
         )
     }()
@@ -179,16 +176,9 @@ public enum HookRunner {
             || v == 45  // -
     }
 
-    /// ProcessProbe.pathLooksLikeAgent 를 확장해 Windows 경로(`\` 구분자, `.exe` 확장자)도 처리한다.
+    /// ProcessProbe 와 같은 판정(`/`·`\` 구분자, `.exe` 제거). 앱이 생사를 볼 때와 훅이 pid 를 고를 때 기준이 같아야 한다.
     private static func pathLooksLikeAgent(_ path: String) -> Bool {
-        let agentNames: Set<String> = ["claude", "codex"]
-        let components = path.split(whereSeparator: { $0 == "/" || $0 == "\\" })
-        return components.contains { component in
-            let base = component.hasSuffix(".exe") || component.hasSuffix(".EXE")
-                ? String(component.dropLast(4)).lowercased()
-                : component.lowercased()
-            return agentNames.contains(base)
-        }
+        ProcessProbe.pathLooksLikeAgent(path)
     }
 
     private static func resolveHostSession(agent: Agent, environment: [String: String]) -> String? {
