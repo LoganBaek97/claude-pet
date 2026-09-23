@@ -78,9 +78,16 @@ public final class FilePreferencesStore: PreferencesStore {
         lock.lock(); defer { lock.unlock() }
         refreshIfNeeded()
         clearKey(key)
-        if let v = value as? String { data.strings[key] = v }
-        else if let v = value as? Bool { data.bools[key] = v }
-        else if let v = value as? Double { data.doubles[key] = v }
+        // Darwin 에서는 Double 이 NSNumber 로 다리를 건너 `1.0 as? Bool` 이 성공한다. 정확한 타입으로 가른다.
+        if let value {
+            switch value {
+            case let v as String: data.strings[key] = v
+            case let v as Bool where type(of: value) == Bool.self: data.bools[key] = v
+            case let v as Double: data.doubles[key] = v
+            case let v as Int: data.doubles[key] = Double(v)
+            default: break
+            }
+        }
         saveLocked()
     }
 

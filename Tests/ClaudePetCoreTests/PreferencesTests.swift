@@ -128,4 +128,16 @@ extension PreferencesTests {
         store.set(nil, forKey: "key")
         XCTAssertNil(store.stringValue(forKey: "key"))
     }
+
+    /// Darwin 에서 1.0 이 Bool 로 새는 버그를 막는다. 파일 저장소는 Windows 에서 쓰지만 테스트는 여기서 돈다.
+    func testFileStoreKeepsWholeNumberDoublesAsDoubles() {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("claude-pet-prefs-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let prefs = Preferences(store: FilePreferencesStore(url: url))
+        prefs.scale = 1.0
+        prefs.isHidden = true
+        XCTAssertEqual(Preferences(store: FilePreferencesStore(url: url)).scale, 1.0)
+        XCTAssertTrue(Preferences(store: FilePreferencesStore(url: url)).isHidden)
+    }
 }
