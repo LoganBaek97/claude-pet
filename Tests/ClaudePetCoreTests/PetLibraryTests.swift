@@ -53,9 +53,9 @@ final class PetLibraryTests: XCTestCase {
         XCTAssertEqual(pets[0].spritesheetURL.lastPathComponent, "spritesheet.png")
     }
 
-    /// F-4 회귀: spritesheetPath 가 디렉터리 밖을 가리킬 수 있으면(빈 값/ "/" 포함/ ".." 포함) 펫을 무효로 본다.
+    /// F-4 회귀: spritesheetPath 가 디렉터리 밖을 가리킬 수 있으면(빈 값/ "/" 포함/ "\" 포함/ ".." 포함) 펫을 무효로 본다.
     func testRejectsUnsafeSpritesheetPath() throws {
-        for badPath in ["../secret.webp", "sub/spritesheet.webp", "/etc/passwd", ""] {
+        for badPath in ["../secret.webp", "sub/spritesheet.webp", "/etc/passwd", "", #"sub\spritesheet.webp"#, #"..\secret.webp"#] {
             let dir = root.appendingPathComponent("user/evil-\(UUID().uuidString)", isDirectory: true)
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
             let json = #"{"id":"evil","displayName":"E","description":"d","spritesheetPath":"\#(badPath)"}"#

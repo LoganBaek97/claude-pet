@@ -22,9 +22,15 @@ final class PetInstallerTests: XCTestCase {
         TestImages.writePNG(image, to: inner.appendingPathComponent(sheetName))
         let zip = root.appendingPathComponent("\(UUID().uuidString).zip")
         let p = Process()
+#if os(Windows)
+        let systemRoot = ProcessInfo.processInfo.environment["SystemRoot"] ?? "C:\\Windows"
+        p.executableURL = URL(fileURLWithPath: "\(systemRoot)\\System32\\tar.exe")
+        p.arguments = ["-a", "-cf", zip.path, "-C", work.path, "."]
+#else
         p.executableURL = URL(fileURLWithPath: "/usr/bin/zip")
         p.currentDirectoryURL = work
         p.arguments = ["-q", "-r", zip.path, "."]
+#endif
         try p.run(); p.waitUntilExit()
         return try Data(contentsOf: zip)
     }

@@ -1,4 +1,8 @@
+#if os(macOS)
 import Darwin
+#elseif os(Windows)
+import WinSDK
+#endif
 import Foundation
 
 /// 세션 프로세스가 아직 있는지 본다.
@@ -18,31 +22,12 @@ public struct ProcessProbe: Sendable {
         return Self.isAgent(pid) ? .alive : .gone
     }
 
+#if os(macOS)
     /// 신호 0 은 아무것도 보내지 않고 보낼 수 있는지만 확인한다.
     /// 살아 있지만 남의 것이면 EPERM 이 오는데, 그것도 "있다" 는 뜻이다.
     static func exists(_ pid: Int32) -> Bool {
         if kill(pid, 0) == 0 { return true }
         return errno == EPERM
-    }
-
-    /// 두 가지를 본다. 한쪽만으로는 설치 방식에 따라 놓친다.
-    ///
-    /// 1. 커널이 들고 있는 짧은 이름(`p_comm`). 실행할 때 쓴 경로의 마지막 조각이라 보통 `claude` 다.
-    /// 2. 실행 파일의 실제 경로. CLI 로 깐 Claude Code 는 심볼릭 링크를 따라가면 파일 이름이
-    ///    버전 번호다(`~/.local/share/claude/versions/2.1.274`). 그래서 마지막 조각이 아니라
-    ///    경로에 `claude`/`codex` 디렉터리가 있는지로 본다.
-    static func isAgent(_ pid: Int32) -> Bool {
-        if let name = processName(pid), agentNames.contains(name) { return true }
-        guard let path = executablePath(pid) else { return false }
-        return pathLooksLikeAgent(path)
-    }
-
-    /// 경로를 조각내 `claude`/`codex` 라는 조각이 통째로 있는지 본다.
-    /// 문자열 포함이나 접두사로 보면 `claude-pet`(이 앱 자신)까지 에이전트로 걸린다.
-    /// 설치 경로들은 어디엔가 이 조각을 꼭 갖고 있다.
-    /// `~/.local/share/claude/versions/2.1.274`, `…/Claude/claude-code/…/MacOS/claude`, `…/bin/codex`.
-    static func pathLooksLikeAgent(_ path: String) -> Bool {
-        path.split(separator: "/").contains { agentNames.contains($0.lowercased()) }
     }
 
     /// 커널이 들고 있는 짧은 프로세스 이름. 없는 프로세스면 nil.
@@ -62,5 +47,61 @@ public struct ProcessProbe: Sendable {
         let length = proc_pidpath(pid, &buffer, UInt32(buffer.count))
         guard length > 0 else { return nil }
         return String(cString: buffer)
+    }
+#elseif os(Windows)
+    static func exists(_ pid: Int32) -> Bool {
+        let h = OpenProcess(DWORD(PROCESS_QUERY_LIMITED_INFORMATION), false, DWORD(pid))
+        if let h { CloseHandle(h); return true }
+        return GetLastError() == DWORD(ERROR_ACCESS_DENIED)   // alive but not ours
+    }
+
+    static func executablePath(_ pid: Int32) -> String? {
+        guard let h = OpenProcess(DWORD(PROCESS_QUERY_LIMITED_INFORMATION), false, DWORD(pid)) else { return nil }
+        defer { CloseHandle(h) }
+        var size = DWORD(32768)
+        var buf = [WCHAR](repeating: 0, count: Int(size))
+        guard QueryFullProcessImageNameW(h, 0, &buf, &size) else { return nil }
+        return String(decodingCString: buf, as: UTF16.self)
+    }
+
+    static func processName(_ pid: Int32) -> String? {   // last path component without .exe, lowercased
+        executablePath(pid).map { Self.baseName($0) }
+    }
+#else
+    static func exists(_ pid: Int32) -> Bool { false }
+    static func processName(_ pid: Int32) -> String? { nil }
+    static func executablePath(_ pid: Int32) -> String? { nil }
+#endif
+
+    /// 두 가지를 본다. 한쪽만으로는 설치 방식에 따라 놓친다.
+    ///
+    /// 1. 커널이 들고 있는 짧은 이름(`p_comm`). 실행할 때 쓴 경로의 마지막 조각이라 보통 `claude` 다.
+    /// 2. 실행 파일의 실제 경로. CLI 로 깐 Claude Code 는 심볼릭 링크를 따라가면 파일 이름이
+    ///    버전 번호다(`~/.local/share/claude/versions/2.1.274`). 그래서 마지막 조각이 아니라
+    ///    경로에 `claude`/`codex` 디렉터리가 있는지로 본다.
+    static func isAgent(_ pid: Int32) -> Bool {
+        if let name = processName(pid), agentNames.contains(name) { return true }
+        guard let path = executablePath(pid) else { return false }
+        return pathLooksLikeAgent(path)
+    }
+
+    /// 경로를 조각내 `claude`/`codex` 라는 조각이 통째로 있는지 본다.
+    /// 문자열 포함이나 접두사로 보면 `claude-pet`(이 앱 자신)까지 에이전트로 걸린다.
+    /// 설치 경로들은 어디엔가 이 조각을 꼭 갖고 있다.
+    /// `~/.local/share/claude/versions/2.1.274`, `…/Claude/claude-code/…/MacOS/claude`, `…/bin/codex`.
+    /// Windows 경로도 지원한다: `C:\Users\x\AppData\Local\Programs\claude\claude.exe`.
+    /// npm 으로 설치한 Claude Code 는 `node.exe`(또는 `node`)로 실행되므로 이 방법으로는 감지되지 않는다.
+    /// macOS npm 설치도 같은 한계를 갖는다.
+    static func pathLooksLikeAgent(_ path: String) -> Bool {
+        path.split(whereSeparator: { $0 == "/" || $0 == "\\" })
+            .contains { agentNames.contains(baseName(String($0))) }
+    }
+
+    /// 경로 문자열에서 마지막 조각을 취해 소문자로 만들고 `.exe` 확장자를 제거한다.
+    /// `/` 와 `\` 를 모두 구분자로 본다.
+    static func baseName(_ path: String) -> String {
+        let last = path.split(whereSeparator: { $0 == "/" || $0 == "\\" }).last.map(String.init) ?? path
+        let lowered = last.lowercased()
+        return lowered.hasSuffix(".exe") ? String(lowered.dropLast(4)) : lowered
     }
 }

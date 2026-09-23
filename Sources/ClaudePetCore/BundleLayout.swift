@@ -26,10 +26,24 @@ public enum BundleLayout {
         return resources(executable: executable).appendingPathComponent("hooks/hook.sh")
     }
 
+    /// Windows 배포 레이아웃: <root>\ClaudePetWin.exe, <root>\claude-pet.exe, <root>\pets\default\
+    public static func hookExecutable(executable: URL) -> URL {
+        executable.deletingLastPathComponent().appendingPathComponent("claude-pet.exe")
+    }
+
     public static func builtinPetDirectory(executable: URL) -> URL {
+#if os(Windows)
+        let winPetsDefault = executable.deletingLastPathComponent()
+            .appendingPathComponent("pets/default", isDirectory: true)
+        if FileManager.default.fileExists(atPath: winPetsDefault.path) {
+            return winPetsDefault
+        }
+        return resources(executable: executable).appendingPathComponent("Resources/pets/default", isDirectory: true)
+#else
         if appBundle(containing: executable) != nil {
             return resources(executable: executable).appendingPathComponent("pets/default", isDirectory: true)
         }
         return resources(executable: executable).appendingPathComponent("Resources/pets/default", isDirectory: true)
+#endif
     }
 }
