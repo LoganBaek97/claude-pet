@@ -76,7 +76,7 @@ private func spikeTrayIcon() -> Bool {
     nid.cbSize = DWORD(MemoryLayout<NOTIFYICONDATAW>.size)
     nid.uID = 1
     nid.uFlags = UINT(NIF_ICON | NIF_TIP)
-    nid.hIcon = LoadIconW(nil, UnsafePointer<WCHAR>(bitPattern: UInt(IDI_APPLICATION))!)
+    nid.hIcon = LoadIconW(nil, UnsafePointer<WCHAR>(bitPattern: 32512)!) // IDI_APPLICATION 은 매크로라 Swift 에 안 들어온다
     let tip = Array("Claude Pet".utf16)
     withUnsafeMutablePointer(to: &nid.szTip) { raw in
         raw.withMemoryRebound(to: WCHAR.self, capacity: 128) { dst in
