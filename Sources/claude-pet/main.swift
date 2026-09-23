@@ -20,6 +20,7 @@ func usage() -> Never {
       list                 설치된 펫을 보여준다
       login-item on|off    로그인 시 자동 실행
       status               훅 설치 여부와 살아 있는 세션 상태
+      hook [--agent claude|codex]   (내부용) 에이전트 훅 이벤트를 상태 파일로 기록한다
     """)
     exit(2)
 }
@@ -141,6 +142,30 @@ case "status":
         let how = probe.liveness(of: s) == .alive ? "프로세스 확인" : "최근 신호"
         print("  \(s.agent.rawValue.padding(toLength: 7, withPad: " ", startingAt: 0)) \(summary.state.rawValue.padding(toLength: 8, withPad: " ", startingAt: 0)) \(s.projectName.padding(toLength: 24, withPad: " ", startingAt: 0)) \(s.tool.padding(toLength: 10, withPad: " ", startingAt: 0)) \(age)s 전  \(how)  \(s.sessionId)")
     }
+
+case "hook":
+    // 내부용. Claude Code / Codex 가 이벤트마다 부른다. 어떤 경우에도 exit 0, stdout 없음.
+    var hookAgent = Agent.claude
+    if args.count >= 3, args[1] == "--agent", let a = Agent(rawValue: args[2]) { hookAgent = a }
+    let hookInput = FileHandle.standardInput.readDataToEndOfFile()
+    #if os(Windows)
+    let hookAncestry: ProcessAncestry = WindowsProcessAncestry()
+    let hookRule = HostAppRule.windows
+    #else
+    let hookAncestry: ProcessAncestry = DarwinProcessAncestry()
+    let hookRule = HostAppRule.macOS
+    #endif
+    let hookAction = HookRunner.decide(
+        input: hookInput,
+        agent: hookAgent,
+        environment: ProcessInfo.processInfo.environment,
+        ancestry: hookAncestry,
+        selfPid: ProcessInfo.processInfo.processIdentifier,
+        hostRule: hookRule,
+        now: Date()
+    )
+    HookRunner.perform(hookAction, stateDirectory: Paths.stateDirectory)
+    exit(0)
 
 case "help", "-h", "--help":
     usage()

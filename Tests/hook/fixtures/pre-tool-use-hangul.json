@@ -1,0 +1,7 @@
+{
+  "session_id": "sess-hangul",
+  "transcript_path": "/Users/x/.claude/projects/p/sess-hangul.jsonl",
+  "cwd": "/Users/x/프로젝트 폴더",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "도구"
+}
