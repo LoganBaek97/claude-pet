@@ -61,7 +61,7 @@ public enum WICDecoder: SpriteDecoder {
         var factoryPtr: UnsafeMutableRawPointer?
         var clsid = clsidFactory
         var iid = iidFactory
-        var hr = CoCreateInstance(&clsid, nil, DWORD(CLSCTX_INPROC_SERVER), &iid, &factoryPtr)
+        var hr = CoCreateInstance(&clsid, nil, DWORD(CLSCTX_INPROC_SERVER.rawValue), &iid, &factoryPtr)
         guard hr >= 0, let factoryRaw = factoryPtr else { throw SpriteSheetError.cannotDecode }
         let factory = factoryRaw.assumingMemoryBound(to: IWICImagingFactory.self)
         defer { factory.pointee.lpVtbl.pointee.Release(factory) }
@@ -82,6 +82,8 @@ public enum WICDecoder: SpriteDecoder {
         hr = decoder.pointee.lpVtbl.pointee.GetFrame(decoder, 0, &frame)
         guard hr >= 0, let frame else { throw SpriteSheetError.cannotDecode }
         defer { frame.pointee.lpVtbl.pointee.Release(frame) }
+        // IWICBitmapFrameDecode 는 IWICBitmapSource 를 상속하지만 Swift 는 COM 상속을 모른다. 포인터를 다시 묶는다.
+        let frameSource = UnsafeMutableRawPointer(frame).assumingMemoryBound(to: IWICBitmapSource.self)
 
         // 포맷 컨버터 생성
         var converter: UnsafeMutablePointer<IWICFormatConverter>?
@@ -93,7 +95,7 @@ public enum WICDecoder: SpriteDecoder {
         var targetFormat = pixelFormatPBGRA
         var needsSwizzle = true
         hr = converter.pointee.lpVtbl.pointee.Initialize(
-            converter, frame, &targetFormat,
+            converter, frameSource, &targetFormat,
             WICBitmapDitherTypeNone, nil, 0,
             WICBitmapPaletteTypeCustom)
         if hr < 0 {
@@ -101,7 +103,7 @@ public enum WICDecoder: SpriteDecoder {
             targetFormat = pixelFormatPRGBA
             needsSwizzle = false
             hr = converter.pointee.lpVtbl.pointee.Initialize(
-                converter, frame, &targetFormat,
+                converter, frameSource, &targetFormat,
                 WICBitmapDitherTypeNone, nil, 0,
                 WICBitmapPaletteTypeCustom)
             guard hr >= 0 else { throw SpriteSheetError.cannotDecode }
