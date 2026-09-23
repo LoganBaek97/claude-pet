@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 import ClaudePetCore
 
@@ -56,3 +57,4 @@ final class PetLayerView: NSView {
 
     override func rightMouseDown(with event: NSEvent) { onRightClick?(event) }
 }
+#endif

@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 import ClaudePetCore
 
@@ -21,3 +22,4 @@ extension SpriteFrame {
         )
     }
 }
+#endif
