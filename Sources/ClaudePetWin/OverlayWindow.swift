@@ -39,7 +39,7 @@ final class OverlayWindow {
         wc.cbSize = UINT(MemoryLayout<WNDCLASSEXW>.size)
         wc.lpfnWndProc = overlayWndProc
         wc.hInstance = hInstance
-        wc.hCursor = LoadCursorW(nil, IDC_ARROW)
+        wc.hCursor = LoadCursorW(nil, UnsafePointer<WCHAR>(bitPattern: 32512)) // IDC_ARROW 는 매크로라 Swift 에 안 들어온다
         classNameW.withUnsafeBufferPointer { ptr in
             wc.lpszClassName = ptr.baseAddress
             RegisterClassExW(&wc)

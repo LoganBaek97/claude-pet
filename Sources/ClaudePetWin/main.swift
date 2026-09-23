@@ -138,7 +138,7 @@ private func spikeFoundationFacts() -> Bool {
         let tmp = dir.appendingPathComponent("s.json.tmp")
         try Data("{\"a\":1}".utf8).write(to: tmp, options: .atomic)
         try Data("{\"a\":0}".utf8).write(to: file, options: .atomic)
-        _ = try fm.replaceItemAt(file, withItemAt: tmp)
+        try fm.replaceItemAtomically(file, with: tmp) // corelibs Windows 에는 replaceItemAt 이 없다
         guard let back = fm.contents(atPath: file.path), String(decoding: back, as: UTF8.self) == "{\"a\":1}" else {
             log("파일 왕복 실패: 내용 불일치"); return false
         }

@@ -113,13 +113,13 @@ public enum WICDecoder: SpriteDecoder {
         guard hr >= 0, w > 0, h > 0 else { throw SpriteSheetError.cannotDecode }
 
         let width = Int(w), height = Int(h)
-        let stride = width * 4
-        let bufferSize = stride * height
+        let rowBytes = width * 4 // `stride` 라고 이름 붙이면 아래 stride(from:to:by:) 를 가린다
+        let bufferSize = rowBytes * height
         var pixels = [UInt8](repeating: 0, count: bufferSize)
 
         hr = pixels.withUnsafeMutableBufferPointer { buf in
             converter.pointee.lpVtbl.pointee.CopyPixels(
-                converter, nil, UINT(stride), UINT(bufferSize), buf.baseAddress!)
+                converter, nil, UINT(rowBytes), UINT(bufferSize), buf.baseAddress!)
         }
         guard hr >= 0 else { throw SpriteSheetError.cannotDecode }
 
