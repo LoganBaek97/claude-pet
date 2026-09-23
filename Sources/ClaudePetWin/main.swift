@@ -1,18 +1,57 @@
-// Windows 앱 진입점. 지금은 Phase 0 스파이크: 툴체인이 WinSDK 를 링크하고 레이어드 창·트레이 아이콘
-// API 를 부를 수 있는지 CI 에서 확인한다. 창이 실제로 뜨는지는 러너에 데스크톱 세션이 있어야 알 수 있어
-// 결과를 로그로만 남기고 어떤 경우에도 exit 0 으로 끝낸다. 이후 단계에서 진짜 앱으로 자란다.
 #if os(Windows)
 import ClaudePetCore
 import Foundation
 import WinSDK
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 
-private func log(_ message: String) {
+// MARK: - 유틸
+
+func log(_ message: String) {
     FileHandle.standardError.write(Data("ClaudePetWin: \(message)\n".utf8))
 }
 
 private func lastError() -> String { "GetLastError=\(GetLastError())" }
 
-/// 레이어드 창을 하나 만들고 반투명 사각형을 한 번 그린 뒤 닫는다. 반환값은 성공 여부.
+// MARK: - DPI 인식
+
+private func setDpiAwareness() {
+    // DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 = ((DPI_AWARENESS_CONTEXT)-4)
+    // SetProcessDpiAwarenessContext 가 가져와지지 않을 수 있으므로 동적 로드한다.
+    let user32 = Array("user32.dll".utf16) + [0]
+    let fnName = "SetProcessDpiAwarenessContext"
+    if let mod = user32.withUnsafeBufferPointer({ LoadLibraryW($0.baseAddress) }) {
+        typealias Fn = @convention(c) (UnsafeMutableRawPointer?) -> WindowsBool
+        if let raw = GetProcAddress(mod, fnName) {
+            let fn = unsafeBitCast(raw, to: Fn.self)
+            _ = fn(UnsafeMutableRawPointer(bitPattern: UInt(bitPattern: Int(-4))))
+        } else {
+            SetProcessDPIAware()
+        }
+        FreeLibrary(mod)
+    } else {
+        SetProcessDPIAware()
+    }
+}
+
+// MARK: - 단일 인스턴스
+
+private func acquireMutex() -> Bool {
+    let name = Array("Local\\ClaudePetWin".utf16) + [0]
+    let handle = name.withUnsafeBufferPointer { buf in
+        CreateMutexW(nil, true, buf.baseAddress)
+    }
+    if GetLastError() == DWORD(ERROR_ALREADY_EXISTS) {
+        if let handle { CloseHandle(handle) }
+        return false
+    }
+    // 핸들을 닫지 않는다: 프로세스가 끝날 때 OS 가 회수한다.
+    return handle != nil
+}
+
+// MARK: - --spike (Phase 0 게이트, 기존 코드)
+
 private func spikeLayeredWindow() -> Bool {
     let className = Array("ClaudePetSpike".utf16) + [0]
     var wc = WNDCLASSEXW()
@@ -24,7 +63,6 @@ private func spikeLayeredWindow() -> Bool {
         return RegisterClassExW(&wc)
     }
     guard atom != 0 else { log("RegisterClassExW 실패 \(lastError())"); return false }
-
     let exStyle = DWORD(WS_EX_LAYERED) | DWORD(WS_EX_TOPMOST) | DWORD(WS_EX_TOOLWINDOW) | DWORD(WS_EX_NOACTIVATE)
     let hwnd = className.withUnsafeBufferPointer { ptr in
         CreateWindowExW(exStyle, ptr.baseAddress, ptr.baseAddress, DWORD(WS_POPUP),
@@ -32,13 +70,11 @@ private func spikeLayeredWindow() -> Bool {
     }
     guard let hwnd else { log("CreateWindowExW 실패 \(lastError())"); return false }
     defer { DestroyWindow(hwnd) }
-
-    // 32bpp premultiplied BGRA DIB 에 반투명 사각형을 채운다.
     let width: Int32 = 192, height: Int32 = 208
     var bmi = BITMAPINFO()
     bmi.bmiHeader.biSize = DWORD(MemoryLayout<BITMAPINFOHEADER>.size)
     bmi.bmiHeader.biWidth = width
-    bmi.bmiHeader.biHeight = -height // top-down
+    bmi.bmiHeader.biHeight = -height
     bmi.bmiHeader.biPlanes = 1
     bmi.bmiHeader.biBitCount = 32
     bmi.bmiHeader.biCompression = DWORD(BI_RGB)
@@ -57,7 +93,6 @@ private func spikeLayeredWindow() -> Bool {
     defer { DeleteDC(memDC) }
     let old = SelectObject(memDC, dib)
     defer { SelectObject(memDC, old) }
-
     var blend = BLENDFUNCTION(BlendOp: BYTE(AC_SRC_OVER), BlendFlags: 0, SourceConstantAlpha: 255, AlphaFormat: BYTE(AC_SRC_ALPHA))
     var dst = POINT(x: 100, y: 100)
     var size = SIZE(cx: width, cy: height)
@@ -70,13 +105,12 @@ private func spikeLayeredWindow() -> Bool {
     return true
 }
 
-/// 트레이 아이콘을 하나 등록하고 바로 지운다.
 private func spikeTrayIcon() -> Bool {
     var nid = NOTIFYICONDATAW()
     nid.cbSize = DWORD(MemoryLayout<NOTIFYICONDATAW>.size)
     nid.uID = 1
     nid.uFlags = UINT(NIF_ICON | NIF_TIP)
-    nid.hIcon = LoadIconW(nil, UnsafePointer<WCHAR>(bitPattern: 32512)!) // IDI_APPLICATION 은 매크로라 Swift 에 안 들어온다
+    nid.hIcon = LoadIconW(nil, UnsafePointer<WCHAR>(bitPattern: UInt(32512))!)  // IDI_APPLICATION
     let tip = Array("Claude Pet".utf16)
     withUnsafeMutablePointer(to: &nid.szTip) { raw in
         raw.withMemoryRebound(to: WCHAR.self, capacity: 128) { dst in
@@ -90,8 +124,6 @@ private func spikeTrayIcon() -> Bool {
     return true
 }
 
-/// corelibs Foundation 이 Windows 에서 경로를 어떤 모양으로 주는지 기록한다. `URL.path` 가 `C:/…` 인지
-/// `/C:/…` 인지에 따라 Paths 계층에 정규화가 필요할 수 있다. 파일 왕복(쓰기·읽기·교체·삭제)도 확인한다.
 private func spikeFoundationFacts() -> Bool {
     let sample = URL(fileURLWithPath: #"C:\Users\x\a.json"#)
     log("URL.path 모양: \(sample.path)  lastPathComponent=\(sample.lastPathComponent)")
@@ -106,7 +138,7 @@ private func spikeFoundationFacts() -> Bool {
         let tmp = dir.appendingPathComponent("s.json.tmp")
         try Data("{\"a\":1}".utf8).write(to: tmp, options: .atomic)
         try Data("{\"a\":0}".utf8).write(to: file, options: .atomic)
-        try fm.replaceItemAtomically(file, with: tmp) // corelibs Windows 에는 replaceItemAt 이 없다
+        _ = try fm.replaceItemAt(file, withItemAt: tmp)
         guard let back = fm.contents(atPath: file.path), String(decoding: back, as: UTF8.self) == "{\"a\":1}" else {
             log("파일 왕복 실패: 내용 불일치"); return false
         }
@@ -121,7 +153,135 @@ private func spikeFoundationFacts() -> Bool {
     }
 }
 
-let args = CommandLine.arguments.dropFirst()
+// MARK: - --self-test
+
+private func selfTest() -> Int32 {
+    log("=== self-test 시작 ===")
+    var failures: Int32 = 0
+
+    // 1. 내장 펫 디코딩
+    let exe = URL(fileURLWithPath: CommandLine.arguments[0])
+    let builtinDir = BundleLayout.builtinPetDirectory(executable: exe)
+    log("내장 펫 디렉터리: \(builtinDir.path)")
+
+    var pet: InstalledPet?
+    if let p = PetLibrary.load(directory: builtinDir, source: .builtin) {
+        pet = p
+    } else {
+        // CI 는 저장소 루트에서 swift run 하므로 Resources/pets/default 가 cwd 기준으로 있을 수 있다.
+        let cwdFallback = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            .appendingPathComponent("Resources/pets/default", isDirectory: true)
+        log("내장 펫 폴백: \(cwdFallback.path)")
+        pet = PetLibrary.load(directory: cwdFallback, source: .builtin)
+    }
+
+    if let pet {
+        log("펫 발견: \(pet.manifest.displayName)")
+        do {
+            let sheet = try SpriteSheet(contentsOf: pet.spritesheetURL, spriteVersion: pet.manifest.spriteVersion)
+            for row in SpriteRow.allCases {
+                let count = sheet.frameCount(for: row)
+                if count < 1 {
+                    log("FAIL: \(row) 프레임 0 개")
+                    failures += 1
+                } else {
+                    log("ok: \(row) 프레임 \(count) 개")
+                }
+            }
+            if sheet.frameCount(for: .idle) < 1 {
+                log("FAIL: idle 프레임 부족")
+                failures += 1
+            }
+
+            // 2. Surface 합성
+            let frame = sheet.frames(for: .idle)[0]
+            var surface = PixelSurface(width: 96, height: 104)
+            surface.blitSpriteFrame(frame, dstX: 0, dstY: 0, dstW: 96, dstH: 104)
+            if surface.hasVisiblePixels {
+                log("ok: Surface 합성 성공 (0.5 스케일)")
+            } else {
+                log("FAIL: Surface 에 보이는 픽셀 없음")
+                failures += 1
+            }
+        } catch {
+            log("FAIL: 시트 디코딩 실패: \(error)")
+            failures += 1
+        }
+    } else {
+        log("FAIL: 내장 펫을 찾지 못함")
+        failures += 1
+    }
+
+    // 3. 말풍선 렌더
+    let s1 = SessionState(sessionId: "test-1", state: .waiting, event: "PermissionRequest", tool: "Bash",
+                          cwd: "/tmp/project", ts: Date().timeIntervalSince1970)
+    let s2 = SessionState(sessionId: "test-2", state: .running, event: "PreToolUse", tool: "Edit",
+                          cwd: "/tmp/other", ts: Date().timeIntervalSince1970 - 60)
+    let sum1 = SessionSummary(session: s1, state: .waiting)
+    let sum2 = SessionSummary(session: s2, state: .running)
+    let agg = Aggregate(state: .waiting, session: s1, waitingCount: 1, liveSessionCount: 2,
+                        sessions: [sum1, sum2])
+    let renderer = BubbleRenderer()
+    if let result = renderer.render(aggregate: agg, surfaceWidth: 280) {
+        if result.surface.hasVisiblePixels {
+            log("ok: 말풍선 렌더 성공 (높이 \(result.totalHeight))")
+        } else {
+            log("FAIL: 말풍선 렌더에 보이는 픽셀 없음")
+            failures += 1
+        }
+    } else {
+        log("FAIL: 말풍선 렌더 nil 반환")
+        failures += 1
+    }
+
+    // 4. StateWatcher refresh (빈 디렉터리 — 오류 없이 돌아야 한다)
+    let stateDir: URL
+    if let env = ProcessInfo.processInfo.environment["CLAUDE_PET_STATE_DIR"], !env.isEmpty {
+        stateDir = URL(fileURLWithPath: env, isDirectory: true)
+    } else {
+        stateDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("claude-pet-selftest-\(ProcessInfo.processInfo.processIdentifier)", isDirectory: true)
+        try? FileManager.default.createDirectory(at: stateDir, withIntermediateDirectories: true)
+    }
+    var watcherAgg: Aggregate?
+    let watcher = StateWatcher(store: StateStore(directory: stateDir)) { agg in watcherAgg = agg }
+    watcher.refresh(force: true)
+    log("ok: StateWatcher refresh 완료 (sessions=\(watcherAgg?.liveSessionCount ?? 0))")
+
+    // 5. UI 테스트: 오버레이 창 생성 (러너에 데스크톱이 없을 수도 있지만 있으면 확인)
+    log("--- UI 테스트 ---")
+    do {
+        let overlay = OverlayWindow()
+        overlay.show()
+        if overlay.isVisible {
+            log("ok: OverlayWindow 생성·표시 성공")
+        } else {
+            log("FAIL: OverlayWindow 표시 실패")
+            failures += 1
+        }
+        // 잠시 대기 후 파괴
+        Sleep(500)
+        overlay.hide()
+        log("ok: OverlayWindow 숨기기 성공")
+    }
+
+    // 트레이: 실패해도 경고만 (탐색기가 없을 수 있다)
+    let trayOk = spikeTrayIcon()
+    if trayOk {
+        log("ok: 트레이 아이콘 테스트 성공")
+    } else {
+        log("WARN: 트레이 아이콘 테스트 실패 (탐색기 없음?) — \(lastError())")
+        // 경고이지 실패가 아니다
+    }
+
+    log("=== self-test 끝: 실패 \(failures) 건 ===")
+    return failures
+}
+
+// MARK: - 진입점
+
+let args = Set(CommandLine.arguments.dropFirst())
+
 if args.contains("--spike") {
     let facts = spikeFoundationFacts()
     let window = spikeLayeredWindow()
@@ -129,8 +289,35 @@ if args.contains("--spike") {
     log("spike 결과 foundation=\(facts) window=\(window) tray=\(tray)")
     exit(0)
 }
-log("아직 구현되지 않았습니다. --spike 로 툴체인 점검만 할 수 있습니다.")
-exit(0)
+
+if args.contains("--self-test") {
+    setDpiAwareness()
+    SpriteDecoders.default = WICDecoder.self
+    let failures = selfTest()
+    exit(failures)
+}
+
+// 정상 앱 실행
+setDpiAwareness()
+
+guard acquireMutex() else {
+    log("이미 실행 중인 인스턴스가 있습니다.")
+    exit(0)
+}
+
+SpriteDecoders.default = WICDecoder.self
+
+let app = App()
+app.run()
+
+var msg = MSG()
+while GetMessageW(&msg, nil, 0, 0) != 0 {
+    TranslateMessage(&msg)
+    DispatchMessageW(&msg)
+}
+
+app.tray.removeIcon()
+
 #else
 // Windows 전용 실행 파일. 다른 플랫폼에서는 빈 진입점만 남겨 패키지 전체 빌드를 막지 않는다.
 #endif
