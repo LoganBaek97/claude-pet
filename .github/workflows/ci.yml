@@ -38,8 +38,10 @@ jobs:
         run: swift test
       # Phase 0 게이트: WinSDK 링크와 Foundation 파일 동작. 창 생성 성공 여부는 로그로만 남는다.
       - name: Spike (layered window, tray, Foundation facts)
+        if: always()
         run: swift run ClaudePetWin --spike
       # 네이티브 훅: 픽스처 직접 입력, 설치기가 만든 명령을 bash/powershell/pwsh 로 실행, 콜드 스타트.
       - name: Hook integration
+        if: always()
         shell: pwsh
         run: pwsh Tests/hook/run.ps1

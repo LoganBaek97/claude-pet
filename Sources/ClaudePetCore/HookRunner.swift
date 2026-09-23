@@ -199,16 +199,7 @@ public enum HookRunner {
             }
             do {
                 try data.write(to: tmp)
-                #if os(Windows)
-                try? FileManager.default.removeItem(at: destination)
-                try FileManager.default.moveItem(at: tmp, to: destination)
-                #else
-                if FileManager.default.fileExists(atPath: destination.path) {
-                    _ = try FileManager.default.replaceItemAt(destination, withItemAt: tmp)
-                } else {
-                    try FileManager.default.moveItem(at: tmp, to: destination)
-                }
-                #endif
+                try FileManager.default.replaceItemAtomically(destination, with: tmp)
                 return
             } catch {
                 try? FileManager.default.removeItem(at: tmp)

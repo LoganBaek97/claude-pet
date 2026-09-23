@@ -130,11 +130,7 @@ public final class FilePreferencesStore: PreferencesStore {
         let tmp = url.appendingPathExtension("tmp")
         do {
             try encoded.write(to: tmp)
-            if FileManager.default.fileExists(atPath: url.path) {
-                _ = try? FileManager.default.replaceItemAt(url, withItemAt: tmp)
-            } else {
-                try FileManager.default.moveItem(at: tmp, to: url)
-            }
+            try FileManager.default.replaceItemAtomically(url, with: tmp)
         } catch {
             try? FileManager.default.removeItem(at: tmp)
         }

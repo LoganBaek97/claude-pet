@@ -81,7 +81,7 @@ public struct PetInstaller: Sendable {
         try fm.copyItem(at: sourceDir, to: staged)
         defer { try? fm.removeItem(at: staged) }
         if fm.fileExists(atPath: target.path) {
-            _ = try fm.replaceItemAt(target, withItemAt: staged)
+            try fm.replaceItemAtomically(target, with: staged)
         } else {
             try fm.moveItem(at: staged, to: target)
         }
