@@ -32,13 +32,15 @@ final class OverlayWindow {
     private var dragged = false
 
     init() {
-        hInstance = GetModuleHandleW(nil)
+        // 초기화가 끝나기 전에 클로저가 self 를 잡으면 안 되므로 지역 변수로 든다.
+        let inst = GetModuleHandleW(nil)
+        hInstance = inst
 
         let classNameW = Array(Self.className.utf16) + [0]
         var wc = WNDCLASSEXW()
         wc.cbSize = UINT(MemoryLayout<WNDCLASSEXW>.size)
         wc.lpfnWndProc = overlayWndProc
-        wc.hInstance = hInstance
+        wc.hInstance = inst
         wc.hCursor = LoadCursorW(nil, UnsafePointer<WCHAR>(bitPattern: 32512)) // IDC_ARROW 는 매크로라 Swift 에 안 들어온다
         classNameW.withUnsafeBufferPointer { ptr in
             wc.lpszClassName = ptr.baseAddress
@@ -48,7 +50,7 @@ final class OverlayWindow {
         let exStyle = DWORD(WS_EX_LAYERED) | DWORD(WS_EX_TOPMOST) | DWORD(WS_EX_TOOLWINDOW) | DWORD(WS_EX_NOACTIVATE)
         hwnd = classNameW.withUnsafeBufferPointer { ptr in
             CreateWindowExW(exStyle, ptr.baseAddress, ptr.baseAddress, DWORD(WS_POPUP),
-                            0, 0, 1, 1, nil, nil, hInstance, nil)!
+                            0, 0, 1, 1, nil, nil, inst, nil)!
         }
     }
 

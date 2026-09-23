@@ -44,29 +44,22 @@ enum SessionOpener {
             guard norm1 == norm2 else { return false }
         }
         // 창 찾기
-        var found: HWND?
-        var targetPid = DWORD(pid)
-        withUnsafeMutablePointer(to: &found) { foundPtr in
-            withUnsafeMutablePointer(to: &targetPid) { pidPtr in
-                // 두 포인터를 하나의 구조체로 묶어 전달한다.
-                var ctx = EnumCtx(targetPid: pidPtr.pointee, result: nil)
-                withUnsafeMutablePointer(to: &ctx) { ctxPtr in
-                    EnumWindows({ hwnd, lParam -> WindowsBool in
-                        guard let hwnd, lParam != 0 else { return true }
-                        let ctx = UnsafeMutablePointer<EnumCtx>(bitPattern: Int(lParam))! // LPARAM 은 Int64
-                        var wPid: DWORD = 0
-                        GetWindowThreadProcessId(hwnd, &wPid)
-                        guard wPid == ctx.pointee.targetPid else { return true }
-                        // 보이는 최상위 윈도우만 (owner 가 없는 것)
-                        guard IsWindowVisible(hwnd), GetWindow(hwnd, UINT(GW_OWNER)) == nil else { return true }
-                        ctx.pointee.result = hwnd
-                        return false // 찾았으면 중단
-                    }, LPARAM(Int(bitPattern: ctxPtr)))
-                    found = ctx.result
-                }
-            }
-        }
-        guard let wnd = found else { return shellOpen(bundlePath) }
+        // 콜백은 @convention(c) 라 캡처가 안 된다. 컨텍스트를 힙에 두고 lParam 으로 넘긴다.
+        let ctxPtr = UnsafeMutablePointer<EnumCtx>.allocate(capacity: 1)
+        ctxPtr.initialize(to: EnumCtx(targetPid: DWORD(pid), result: nil))
+        defer { ctxPtr.deinitialize(count: 1); ctxPtr.deallocate() }
+        EnumWindows({ hwnd, lParam -> WindowsBool in
+            guard let hwnd, lParam != 0 else { return true }
+            let ctx = UnsafeMutablePointer<EnumCtx>(bitPattern: Int(lParam))! // LPARAM 은 Int64
+            var wPid: DWORD = 0
+            GetWindowThreadProcessId(hwnd, &wPid)
+            guard wPid == ctx.pointee.targetPid else { return true }
+            // 보이는 최상위 윈도우만 (owner 가 없는 것)
+            guard IsWindowVisible(hwnd), GetWindow(hwnd, UINT(GW_OWNER)) == nil else { return true }
+            ctx.pointee.result = hwnd
+            return false // 찾았으면 중단
+        }, LPARAM(Int(bitPattern: ctxPtr)))
+        guard let wnd = ctxPtr.pointee.result else { return shellOpen(bundlePath) }
         if IsIconic(wnd) { ShowWindow(wnd, SW_RESTORE) }
         if !SetForegroundWindow(wnd) {
             AllowSetForegroundWindow(DWORD(pid))

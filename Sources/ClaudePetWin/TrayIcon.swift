@@ -32,13 +32,14 @@ final class TrayIcon {
     private let taskbarCreatedMsg: UINT
 
     init() {
-        hInstance = GetModuleHandleW(nil)
+        let inst = GetModuleHandleW(nil)
+        hInstance = inst
 
         let nameW = Array(Self.className.utf16) + [0]
         var wc = WNDCLASSEXW()
         wc.cbSize = UINT(MemoryLayout<WNDCLASSEXW>.size)
         wc.lpfnWndProc = trayWndProc
-        wc.hInstance = hInstance
+        wc.hInstance = inst
         nameW.withUnsafeBufferPointer { ptr in
             wc.lpszClassName = ptr.baseAddress
             RegisterClassExW(&wc)
@@ -46,7 +47,7 @@ final class TrayIcon {
 
         hiddenHwnd = nameW.withUnsafeBufferPointer { ptr in
             CreateWindowExW(0, ptr.baseAddress, nil, 0,
-                            0, 0, 0, 0, nil, nil, hInstance, nil)!
+                            0, 0, 0, 0, nil, nil, inst, nil)!
         }
 
         let tbMsg = Array("TaskbarCreated".utf16) + [0]
