@@ -18,6 +18,6 @@ let package = Package(
         .executableTarget(name: "ClaudePetApp", dependencies: ["ClaudePetCore"]),
         .executableTarget(name: "ClaudePetWin", dependencies: ["ClaudePetCore"]),
         .executableTarget(name: "claude-pet", dependencies: ["ClaudePetCore"]),
-        .testTarget(name: "ClaudePetCoreTests", dependencies: ["ClaudePetCore"]),
+        .testTarget(name: "ClaudePetCoreTests", dependencies: ["ClaudePetCore"], exclude: ["Fixtures"]),
     ]
 )

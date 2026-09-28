@@ -64,7 +64,7 @@ public enum WICDecoder: SpriteDecoder {
         var hr = CoCreateInstance(&clsid, nil, DWORD(CLSCTX_INPROC_SERVER.rawValue), &iid, &factoryPtr)
         guard hr >= 0, let factoryRaw = factoryPtr else { throw SpriteSheetError.cannotDecode }
         let factory = factoryRaw.assumingMemoryBound(to: IWICImagingFactory.self)
-        defer { factory.pointee.lpVtbl.pointee.Release(factory) }
+        defer { _ = factory.pointee.lpVtbl.pointee.Release(factory) }
 
         // 디코더 생성
         let path = winPath(url)
@@ -75,13 +75,13 @@ public enum WICDecoder: SpriteDecoder {
                 WICDecodeMetadataCacheOnDemand, &decoder)
         }
         guard hr >= 0, let decoder else { throw SpriteSheetError.cannotDecode }
-        defer { decoder.pointee.lpVtbl.pointee.Release(decoder) }
+        defer { _ = decoder.pointee.lpVtbl.pointee.Release(decoder) }
 
         // 첫 프레임
         var frame: UnsafeMutablePointer<IWICBitmapFrameDecode>?
         hr = decoder.pointee.lpVtbl.pointee.GetFrame(decoder, 0, &frame)
         guard hr >= 0, let frame else { throw SpriteSheetError.cannotDecode }
-        defer { frame.pointee.lpVtbl.pointee.Release(frame) }
+        defer { _ = frame.pointee.lpVtbl.pointee.Release(frame) }
         // IWICBitmapFrameDecode 는 IWICBitmapSource 를 상속하지만 Swift 는 COM 상속을 모른다. 포인터를 다시 묶는다.
         let frameSource = UnsafeMutableRawPointer(frame).assumingMemoryBound(to: IWICBitmapSource.self)
 
@@ -89,7 +89,7 @@ public enum WICDecoder: SpriteDecoder {
         var converter: UnsafeMutablePointer<IWICFormatConverter>?
         hr = factory.pointee.lpVtbl.pointee.CreateFormatConverter(factory, &converter)
         guard hr >= 0, let converter else { throw SpriteSheetError.cannotDecode }
-        defer { converter.pointee.lpVtbl.pointee.Release(converter) }
+        defer { _ = converter.pointee.lpVtbl.pointee.Release(converter) }
 
         // PBGRA 로 변환 시도, 성공하면 나중에 BGRA->RGBA 로 교환한다.
         var targetFormat = pixelFormatPBGRA

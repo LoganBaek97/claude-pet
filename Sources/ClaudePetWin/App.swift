@@ -212,7 +212,7 @@ final class App {
 
     func readSystemReducedMotion() {
         var animEnabled: Int32 = 1
-        withUnsafeMutablePointer(to: &animEnabled) { ptr in
+        _ = withUnsafeMutablePointer(to: &animEnabled) { ptr in
             SystemParametersInfoW(UINT(SPI_GETCLIENTAREAANIMATION), 0, ptr, 0)
         }
         controller.systemReducedMotion = animEnabled == 0

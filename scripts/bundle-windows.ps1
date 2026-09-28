@@ -31,22 +31,31 @@ Copy-Item -Recurse (Join-Path $root "Resources\pets\default") (Join-Path $out "p
 Copy-Item (Join-Path $root "scripts\install-windows.ps1") $out
 if (Test-Path (Join-Path $root "README-windows.md")) { Copy-Item (Join-Path $root "README-windows.md") $out }
 
-# Swift 런타임 DLL. 툴체인은 %SDKROOT% = <Swift>\Platforms\Windows.platform\Developer\SDKs\Windows.sdk 를
-# 내보내고 런타임은 <Swift>\Runtimes\<버전>\usr\bin 에 있다. 정적 링크가 가능해지면 이 단계는 없어진다.
+# Swift 런타임 DLL. 러너·개발 기계에서 swiftCore.dll 은 PATH 에 있다(그래서 테스트가 돈다). PATH 를 먼저 훑고,
+# 없으면 %SDKROOT% (…\Swift\Platforms\<ver>\Windows.platform\Developer\SDKs\Windows.sdk) 에서 위로 올라가
+# Runtimes\<ver>\usr\bin 을 찾는다. 정적 링크가 가능해지면 이 단계는 없어진다.
 $runtime = $null
-if ($env:SDKROOT) {
-    $swiftRoot = Resolve-Path (Join-Path $env:SDKROOT "..\..\..\..\..")
-    $candidates = Get-ChildItem -Directory (Join-Path $swiftRoot "Runtimes") -ErrorAction SilentlyContinue |
-        Sort-Object Name -Descending
-    foreach ($c in $candidates) {
-        $p = Join-Path $c.FullName "usr\bin"
-        if (Test-Path (Join-Path $p "swiftCore.dll")) { $runtime = $p; break }
+foreach ($dir in ($env:Path -split ";")) {
+    if ($dir -and (Test-Path (Join-Path $dir "swiftCore.dll"))) { $runtime = $dir; break }
+}
+if (-not $runtime -and $env:SDKROOT) {
+    $probe = $env:SDKROOT.TrimEnd("\")
+    for ($i = 0; $i -lt 8 -and $probe; $i++) {
+        $runtimes = Join-Path $probe "Runtimes"
+        if (Test-Path $runtimes) {
+            $found = Get-ChildItem -Recurse -Filter swiftCore.dll -Path $runtimes -ErrorAction SilentlyContinue |
+                Sort-Object FullName -Descending | Select-Object -First 1
+            if ($found) { $runtime = $found.DirectoryName }
+            break
+        }
+        $probe = Split-Path -Parent $probe
     }
 }
 if (-not $runtime) {
-    $found = Get-ChildItem -Recurse -Filter swiftCore.dll -Path "C:\Program Files\Swift" -ErrorAction SilentlyContinue |
-        Select-Object -First 1
-    if ($found) { $runtime = $found.DirectoryName }
+    foreach ($root in @((Join-Path $env:LOCALAPPDATA "Programs\Swift"), "C:\Program Files\Swift")) {
+        $found = Get-ChildItem -Recurse -Filter swiftCore.dll -Path $root -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($found) { $runtime = $found.DirectoryName; break }
+    }
 }
 if ($runtime) {
     Write-Host "== 런타임 DLL: $runtime"
