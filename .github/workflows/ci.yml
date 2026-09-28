@@ -45,6 +45,10 @@ jobs:
         if: always()
         shell: pwsh
         run: pwsh Tests/hook/run.ps1
+      # 배포 스크립트가 실제로 zip 을 만드는지(GUI 링크 플래그, 런타임 DLL 수집) 확인한다.
+      - name: Bundle (release zip)
+        if: always()
+        run: powershell -ExecutionPolicy Bypass -File scripts/bundle-windows.ps1 -NoZip
       - name: App self-test
         env:
           CLAUDE_PET_STATE_DIR: ${{ runner.temp }}/claude-pet-state

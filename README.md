@@ -21,7 +21,7 @@ Anthropic 공식 프로젝트가 아니다. 개인이 만든 비공식 도구다
 - Claude Code, Codex, 또는 둘 다
 - macOS: Command Line Tools (아래 참고). Windows: 아무것도 더 필요 없다 (Claude Code 를 쓰려면 Claude Code 자체가 요구하는 Git for Windows 가 있으면 된다)
 
-Windows 지원은 새로 들어갔고 **실기기에서 검증되지 않았다.** 빌드·단위 테스트·훅 통합 테스트는 CI 에서 돌지만 오버레이 창·트레이·클릭 이동은 실제 Windows 에서 확인해 준 사람이 아직 없다. 문제가 있으면 이슈로 알려 주면 좋겠다. 그때까지 Windows 릴리스는 pre-release 로 표시한다.
+Windows 지원은 새로 들어갔고 **실기기에서 검증되지 않았다.** CI 의 Windows 러너에서 빌드·단위 테스트·훅 통합 테스트(Git Bash·PowerShell 로 실제 실행)·앱 자가 점검(기본 펫 디코드, 프레임 합성, 말풍선 렌더, 오버레이 창 생성)까지는 통과한다. 하지만 트레이 아이콘(러너에는 작업 표시줄이 없다), 클릭 통과, 드래그, 호스트 앱 활성화, 딥링크, DPI 는 실제 Windows 에서 확인해 준 사람이 아직 없다. 문제가 있으면 이슈로 알려 주면 좋겠다. 그때까지 Windows 릴리스는 pre-release 로 표시한다.
 
 Xcode 는 필요 없다. 용량이 큰 Xcode 대신 Command Line Tools 만 있으면 된다.
 

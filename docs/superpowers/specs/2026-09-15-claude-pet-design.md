@@ -227,7 +227,7 @@ Codex 세션이면 위 문구 앞에 `Codex · `를 붙인다. Claude는 기본�
 - **스프라이트**: `SpriteFrame`(RGBA8 premultiplied 버퍼)이 Core 의 프레임 타입. 디코더는 `SpriteDecoder` 프로토콜로 플랫폼이 준다(mac ImageIO, Windows WIC). Windows 11 은 WebP WIC 코덱이 기본이고 Windows 10 은 Store 의 WebP Image Extensions 가 필요하다. 없으면 내장 기본 펫(PNG)으로 대체하고 메뉴에 이유를 적는다.
 - **앱 레이어**: `WS_EX_LAYERED|TOPMOST|TOOLWINDOW|NOACTIVATE` 팝업 창에 premultiplied BGRA DIB 를 `UpdateLayeredWindow`. 알파 0 픽셀은 OS 가 클릭을 통과시킨다. 트레이는 `Shell_NotifyIconW`(TaskbarCreated 재등록), 메뉴는 `TrackPopupMenuEx`. 말풍선은 GDI+ 로 같은 DIB 에 합성. 상태 감시는 1초 폴링. 세션 이동은 `ShellExecuteW("claude://…")` 또는 `EnumWindows` → `SetForegroundWindow`(거부 시 `FlashWindowEx`). 로그인 항목은 HKCU Run 키. 동작 줄이기는 `SPI_GETCLIENTAREAANIMATION`. GUI exe 는 `/SUBSYSTEM:WINDOWS /ENTRY:mainCRTStartup` 으로 링크.
 - **배포**: GitHub Actions windows 러너가 `scripts/bundle-windows.ps1` 로 zip 을 만들어 `v*` 태그에 pre-release 로 붙인다. Swift 런타임 DLL 을 동봉한다. 설치는 `install-windows.ps1`(복사, Mark-of-the-Web 제거, PATH, 훅 설치).
-- **검증**: 실기기가 없다. CI 가 빌드·단위 테스트·훅 통합(`Tests/hook/run.ps1`: 픽스처 직접 입력, 설치기가 만든 명령을 bash·powershell.exe·pwsh 로 실행, 콜드 스타트)을 돌린다. 창·트레이·클릭 이동은 실기기 미검증으로 README 에 명시한다.
+- **검증**: 실기기가 없다. CI 가 빌드·단위 테스트·훅 통합(`Tests/hook/run.ps1`: 픽스처 직접 입력, 설치기가 만든 명령을 bash·powershell.exe·pwsh 로 실행, 콜드 스타트)·앱 자가 점검(`ClaudePetWin --self-test`: 기본 펫 WIC 디코드, 프레임 합성, 말풍선 렌더, 오버레이 창 생성·표시)을 돌린다. 2026-09-23 실측: 러너에 데스크톱 세션이 있어 창 생성은 검증되고, 트레이는 작업 표시줄이 없어 E_FAIL 이라 경고로만 남긴다. 클릭 통과·드래그·호스트 활성화·딥링크·DPI 는 실기기 미검증으로 README 에 명시한다.
 - **알려진 제한**: WSL 미지원, npm 설치 Claude(node.exe)의 생사 판정 불가, GUI 호스트 세션에서 `bash.exe` 콘솔 깜빡임 가능(Claude Code 가 스폰하는 쪽의 문제), 코드 서명 없음.
 
 ## 에러 처리
