@@ -27,6 +27,13 @@ public struct Aggregate: Equatable, Sendable {
     }
 
     public static let empty = Aggregate(state: .idle, session: nil, waitingCount: 0, liveSessionCount: 0)
+
+    /// 카드를 눌렀을 때 그 세션 하나만 담은 합성을 만든다.
+    public static func single(_ summary: SessionSummary) -> Aggregate {
+        Aggregate(state: summary.state, session: summary.session,
+                  waitingCount: summary.state == .waiting ? 1 : 0,
+                  liveSessionCount: 1, sessions: [summary])
+    }
 }
 
 /// 세션 프로세스가 아직 있는지. `unknown` 은 옛 훅이 쓴 파일이라 pid 를 모르는 경우다.

@@ -36,8 +36,8 @@ public enum PetLibrary {
         return pet
     }
 
-    /// 디렉터리 밖을 가리킬 수 있는 경로(비어 있음, "/" 포함, ".." 포함)는 거부한다(F-4).
+    /// 디렉터리 밖을 가리킬 수 있는 경로(비어 있음, "/" 포함, "\" 포함, ".." 포함)는 거부한다(F-4).
     static func isSafeSpritesheetPath(_ path: String) -> Bool {
-        !path.isEmpty && !path.contains("/") && !path.contains("..")
+        !path.isEmpty && !path.contains("/") && !path.contains("\\") && !path.contains("..")
     }
 }

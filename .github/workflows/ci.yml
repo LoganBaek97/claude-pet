@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main, windows-support]
+  pull_request:
+
+jobs:
+  macos:
+    name: macOS
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: swift build
+      - name: Unit tests
+        run: swift test
+      - name: Hook shell tests
+        run: sh Tests/hook/run.sh
+      - name: Bundle app
+        run: CLAUDE_PET_UNIVERSAL=0 sh scripts/bundle.sh debug
+
+  windows:
+    name: Windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      # 릴리스 태그로 고정한다. @main 은 입력 이름이 바뀌어 깨진 적이 있다.
+      - uses: compnerd/gha-setup-swift@v0.5.0
+        with:
+          swift-version: swift-6.2.3-release
+          swift-build: 6.2.3-RELEASE
+      - name: Toolchain
+        run: swift --version
+      - name: Build
+        run: swift build -v
+      - name: Unit tests
+        run: swift test
+      # Phase 0 게이트: WinSDK 링크와 Foundation 파일 동작. 창 생성 성공 여부는 로그로만 남는다.
+      - name: Spike (layered window, tray, Foundation facts)
+        if: always()
+        run: swift run ClaudePetWin --spike
+      # 네이티브 훅: 픽스처 직접 입력, 설치기가 만든 명령을 bash/powershell/pwsh 로 실행, 콜드 스타트.
+      - name: Hook integration
+        if: always()
+        shell: pwsh
+        run: pwsh Tests/hook/run.ps1
+      # 배포 스크립트가 실제로 zip 을 만드는지(GUI 링크 플래그, 런타임 DLL 수집) 확인한다.
+      - name: Bundle (release zip)
+        if: always()
+        run: powershell -ExecutionPolicy Bypass -File scripts/bundle-windows.ps1 -NoZip
+      - name: App self-test
+        env:
+          CLAUDE_PET_STATE_DIR: ${{ runner.temp }}/claude-pet-state
+        run: swift run ClaudePetWin --self-test

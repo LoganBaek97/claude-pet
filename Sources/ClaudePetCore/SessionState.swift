@@ -49,7 +49,9 @@ public struct SessionState: Codable, Equatable, Sendable {
     public var timestamp: Date { Date(timeIntervalSince1970: ts) }
 
     /// cwd 의 마지막 경로 요소. 비어 있으면 빈 문자열.
+    /// `/` 와 `\` 를 모두 구분자로 보고, 끝에 구분자가 붙어 있어도 올바르게 처리한다(`C:\proj\` → `proj`).
     public var projectName: String {
-        cwd.isEmpty ? "" : (cwd as NSString).lastPathComponent
+        guard !cwd.isEmpty else { return "" }
+        return cwd.split(whereSeparator: { $0 == "/" || $0 == "\\" }).last.map(String.init) ?? ""
     }
 }

@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 import ClaudePetCore
 import ServiceManagement
@@ -126,3 +127,4 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         NSMenu.popUpContextMenu(menu, with: event, for: view)
     }
 }
+#endif

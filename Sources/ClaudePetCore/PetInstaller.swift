@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking // Windows·Linux 의 corelibs 는 URLSession 을 여기 둔다
+#endif
 
 public enum PetInstallerError: Error, Equatable {
     case invalidId
@@ -78,7 +81,7 @@ public struct PetInstaller: Sendable {
         try fm.copyItem(at: sourceDir, to: staged)
         defer { try? fm.removeItem(at: staged) }
         if fm.fileExists(atPath: target.path) {
-            _ = try fm.replaceItemAt(target, withItemAt: staged)
+            try fm.replaceItemAtomically(target, with: staged)
         } else {
             try fm.moveItem(at: staged, to: target)
         }
@@ -88,8 +91,14 @@ public struct PetInstaller: Sendable {
 
     static func unzip(_ zip: URL, to dir: URL) throws {
         let p = Process()
+#if os(Windows)
+        let systemRoot = ProcessInfo.processInfo.environment["SystemRoot"] ?? "C:\\Windows"
+        p.executableURL = URL(fileURLWithPath: "\(systemRoot)\\System32\\tar.exe")
+        p.arguments = ["-xf", zip.path, "-C", dir.path]
+#else
         p.executableURL = URL(fileURLWithPath: "/usr/bin/unzip")
         p.arguments = ["-o", "-q", zip.path, "-d", dir.path]
+#endif
         p.standardOutput = FileHandle.nullDevice
         p.standardError = FileHandle.nullDevice
         try p.run()

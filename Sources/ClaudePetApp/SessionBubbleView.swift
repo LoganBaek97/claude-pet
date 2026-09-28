@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 import ClaudePetCore
 
@@ -312,3 +313,4 @@ final class SessionBubbleView: NSView {
         layer.add(a, forKey: key)
     }
 }
+#endif

@@ -1,10 +1,37 @@
-import CoreGraphics
 import Foundation
+@testable import ClaudePetCore
+
+#if canImport(ImageIO)
+import CoreGraphics
 import ImageIO
 import UniformTypeIdentifiers
+#endif
 
 enum TestImages {
-    /// 1536×1872 시트를 만든다. `filledCells[row]` 에 적힌 열 개수만큼 앞에서부터 불투명 사각형을 그린다.
+    /// 1536×1872 SpriteFrame 을 만든다. `filledCells[row]` 에 적힌 열 개수만큼 앞에서부터
+    /// 100×100 빨간 사각형을 각 셀 (col*192+40, row*208+40) 에 그린다. 위 행이 메모리 앞.
+    static func sheetFrame(filledCells: [Int], width: Int = 1536, height: Int = 1872) -> SpriteFrame {
+        var pixels = [UInt8](repeating: 0, count: width * height * 4)
+        for (row, count) in filledCells.enumerated() {
+            for col in 0..<count {
+                let rectX = col * 192 + 40
+                let rectY = row * 208 + 40
+                for py in rectY..<(rectY + 100) {
+                    for px in rectX..<(rectX + 100) {
+                        let offset = (py * width + px) * 4
+                        pixels[offset]     = 255 // R
+                        pixels[offset + 1] = 0   // G
+                        pixels[offset + 2] = 0   // B
+                        pixels[offset + 3] = 255 // A
+                    }
+                }
+            }
+        }
+        return SpriteFrame(width: width, height: height, pixels: pixels)
+    }
+
+#if canImport(ImageIO)
+    /// CGImage 기반 시트 픽스처. CGContext 원점은 좌하단이므로 y 를 뒤집는다.
     static func sheet(filledCells: [Int], width: Int = 1536, height: Int = 1872) -> CGImage {
         let space = CGColorSpaceCreateDeviceRGB()
         let ctx = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
@@ -26,4 +53,5 @@ enum TestImages {
         CGImageDestinationAddImage(dest, image, nil)
         CGImageDestinationFinalize(dest)
     }
+#endif
 }

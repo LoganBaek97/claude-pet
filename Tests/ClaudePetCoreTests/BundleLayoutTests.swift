@@ -2,6 +2,7 @@ import XCTest
 @testable import ClaudePetCore
 
 final class BundleLayoutTests: XCTestCase {
+#if os(macOS)
     func testInsideAppBundle() {
         let exe = URL(fileURLWithPath: "/Applications/ClaudePet.app/Contents/MacOS/ClaudePetApp")
         XCTAssertEqual(BundleLayout.appBundle(containing: exe)?.path, "/Applications/ClaudePet.app")
@@ -30,5 +31,13 @@ final class BundleLayoutTests: XCTestCase {
         let linked = repo.appendingPathComponent(".build/debug/ClaudePetApp")
         XCTAssertEqual(BundleLayout.hookScript(executable: linked).path,
                        repo.appendingPathComponent("hooks/hook.sh").path)
+    }
+#endif
+
+    /// Windows 배포 레이아웃: 같은 디렉터리에 claude-pet.exe 를 둔다.
+    /// 이 테스트는 순수 문자열 연산이라 모든 플랫폼에서 돈다.
+    func testHookExecutable() {
+        let exe = URL(fileURLWithPath: "/x/y/claude-pet")
+        XCTAssertEqual(BundleLayout.hookExecutable(executable: exe).path, "/x/y/claude-pet.exe")
     }
 }

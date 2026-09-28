@@ -1,4 +1,6 @@
+#if os(macOS)
 import AppKit
+import ClaudePetCore
 
 /// 프레임 한 장을 픽셀 보간 없이 그린다. 클릭/드래그는 콜백으로 넘긴다.
 final class PetLayerView: NSView {
@@ -23,7 +25,7 @@ final class PetLayerView: NSView {
     }
     required init?(coder: NSCoder) { fatalError() }
 
-    func show(_ image: CGImage) { layer?.contents = image }
+    func show(_ frame: SpriteFrame) { layer?.contents = frame.makeCGImage() }
 
     /// 패널이 nonactivating 이고 키 윈도우가 될 수 없어서 모든 클릭이 first mouse 다.
     /// 이걸 받지 않으면 클릭과 드래그가 통째로 삼켜진다.
@@ -55,3 +57,4 @@ final class PetLayerView: NSView {
 
     override func rightMouseDown(with event: NSEvent) { onRightClick?(event) }
 }
+#endif

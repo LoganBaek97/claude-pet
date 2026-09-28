@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 import ClaudePetCore
 
@@ -191,3 +192,4 @@ final class PetController {
         view.show(frames[min(frame.index, frames.count - 1)])
     }
 }
+#endif

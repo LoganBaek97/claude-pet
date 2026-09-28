@@ -5,3 +5,4 @@ dist/
 .scratch/
 docs/superpowers/plans/
 .omc/
+.claude/worktrees/

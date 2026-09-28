@@ -119,5 +119,13 @@ printf '' | sh "$HOOK"; assert_eq "empty stdin exit0" 0 $?
 printf '{not json' | sh "$HOOK"; assert_eq "broken json exit0" 0 $?
 out=$(sh "$HOOK" < "$FIX/stop.json"); assert_eq "no stdout" "" "$out"
 
+# 한글 경로와 도구 이름이 JSON 을 깨뜨리지 않는다.
+run pre-tool-use-hangul.json
+fh="$CLAUDE_PET_STATE_DIR/sess-hangul.json"
+assert_eq "hangul file created" yes "$([ -f "$fh" ] && echo yes || echo no)"
+assert_eq "hangul state running" running "$(field "$fh" state)"
+assert_eq "hangul tool" "도구" "$(field "$fh" tool)"
+assert_eq "hangul cwd" "/Users/x/프로젝트 폴더" "$(field "$fh" cwd)"
+
 rm -rf "$CLAUDE_PET_STATE_DIR"
 [ $fail -eq 0 ] && echo "ALL OK" || { echo "SOME FAILED"; exit 1; }
