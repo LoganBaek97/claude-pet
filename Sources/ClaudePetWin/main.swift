@@ -281,6 +281,10 @@ private func selfTest() -> Int32 {
 // MARK: - 진입점
 
 let args = Set(CommandLine.arguments.dropFirst())
+// 배포판은 /SUBSYSTEM:WINDOWS 라 stderr 가 없다. 진단 모드에서는 부모 콘솔에 붙여 로그가 보이게 한다.
+if args.contains("--spike") || args.contains("--self-test") {
+    _ = AttachConsole(DWORD(bitPattern: -1)) // ATTACH_PARENT_PROCESS
+}
 
 if args.contains("--spike") {
     let facts = spikeFoundationFacts()

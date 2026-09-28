@@ -1,4 +1,4 @@
-# zip 을 푼 자리에서 실행한다. %LOCALAPPDATA%\Programs\ClaudePet 에 복사하고, 사용자 PATH 에 넣고, 훅을 설치한다.
+﻿# zip 을 푼 자리에서 실행한다. %LOCALAPPDATA%\Programs\ClaudePet 에 복사하고, 사용자 PATH 에 넣고, 훅을 설치한다.
 # 사용법: powershell -ExecutionPolicy Bypass -File .\install-windows.ps1
 # 브라우저로 받은 zip 은 Mark-of-the-Web 이 붙어 SmartScreen 이 exe 를 막을 수 있다. 복사한 파일에서 표식을 지운다.
 $ErrorActionPreference = "Stop"

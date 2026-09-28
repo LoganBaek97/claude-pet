@@ -1,4 +1,4 @@
-# swift build 결과를 dist\ClaudePet-windows-x64\ 로 모으고 zip 으로 싼다.
+﻿# swift build 결과를 dist\ClaudePet-windows-x64\ 로 모으고 zip 으로 싼다.
 # 사용법: powershell -ExecutionPolicy Bypass -File scripts\bundle-windows.ps1 [-Configuration release|debug] [-NoZip]
 # GUI 실행 파일은 콘솔 창이 뜨지 않게 /SUBSYSTEM:WINDOWS 로 링크한다. Swift 는 main 을 만들고 WinMain 은
 # 없으므로 /ENTRY:mainCRTStartup 을 함께 준다. CLI(claude-pet.exe)는 콘솔 앱으로 남긴다.
@@ -52,7 +52,7 @@ if ($runtime) {
     Write-Host "== 런타임 DLL: $runtime"
     Copy-Item (Join-Path $runtime "*.dll") $out
 } else {
-    Write-Warning "Swift 런타임 DLL 디렉터리를 찾지 못했습니다. zip 을 받은 기계에 Swift 런타임이 없으면 실행되지 않습니다."
+    Write-Error "Swift 런타임 DLL 디렉터리를 찾지 못했습니다. zip 을 받은 기계에 Swift 런타임이 없으면 실행되지 않으므로 중단합니다. SDKROOT=$env:SDKROOT"
 }
 
 # 어떤 DLL 에 의존하는지 기록해 둔다(릴리스 로그 확인용).

@@ -1,4 +1,4 @@
-# Windows 네이티브 훅 통합 테스트. 사용법: pwsh Tests/hook/run.ps1  (또는 powershell -File)
+﻿# Windows 네이티브 훅 통합 테스트. 사용법: pwsh Tests/hook/run.ps1  (또는 powershell -File)
 # 1) claude-pet.exe hook 에 픽스처를 직접 넣어 상태 파일을 확인한다 (run.sh 의 단언을 미러링).
 # 2) install-hooks 가 만든 명령 문자열을 실제 셸(bash, powershell.exe, pwsh)로 돌려 상태 파일이 나오는지 본다.
 #    Claude Code 는 sh -c 로, Codex 는 commandWindows 를 PowerShell 문장으로 돌리므로 이 층이 진짜 계약이다.
@@ -120,6 +120,14 @@ if ($claude) {
     Remove-Item (Join-Path $state2 "$($h.session_id).json")
 }
 
+# Claude Code 는 셸 형태 훅을 `sh -c "<command>"` 로 돌린다. 파일이 아니라 명령 문자열로도 같은지 본다.
+if ($claude -and $claude.shell -ne "powershell") {
+    Assert-Eq "claude bash -c form exit0" 0 (Invoke-WithStdin "bash -c '$($claude.command)'" (Join-Path $fix "pre-tool-use-hangul.json"))
+    $r = Read-State $state2 $h.session_id
+    Assert-Eq "claude bash -c cwd intact" $h.cwd $r.cwd
+    Remove-Item (Join-Path $state2 "$($h.session_id).json")
+}
+
 $codex = Our-Entry $codexPath "PreToolUse"
 Assert-Eq "codex entry exists" $true ($null -ne $codex)
 if ($codex) {
@@ -134,8 +142,52 @@ if ($codex) {
         Assert-Eq "codex form via $shell agent" "codex" $r.agent
         Assert-Eq "codex form via $shell cwd intact" $h.cwd $r.cwd
         Remove-Item (Join-Path $state2 "$($h.session_id).json")
+        # Codex 는 commandWindows 를 -Command 문장으로 평가한다. 따옴표가 살아남는지 문자열 그대로 돌린다.
+        $cmdline = "$shell -NoProfile -Command `"$($codex.commandWindows.Replace('"', '\"'))`""
+        Assert-Eq "codex -Command via $shell exit0" 0 (Invoke-WithStdin $cmdline (Join-Path $fix "pre-tool-use-hangul.json"))
+        $r = Read-State $state2 $h.session_id
+        Assert-Eq "codex -Command via $shell cwd intact" $h.cwd $r.cwd
+        Remove-Item (Join-Path $state2 "$($h.session_id).json")
     }
 }
+
+# ---------- 2b. 공백·한글이 든 설치 경로 ----------
+# 한국어 Windows 사용자 이름(C:\Users\로건)과 "First Last" 프로필이 흔하다. 런타임 DLL 은 러너 PATH 에 있어 exe 만 복사해도 돈다.
+$spaced = Join-Path ([IO.Path]::GetTempPath()) "Claude Pet 테스트"
+New-Item -ItemType Directory -Force -Path $spaced | Out-Null
+Copy-Item $exe (Join-Path $spaced "claude-pet.exe") -Force
+$home3 = New-StateDir
+$env:USERPROFILE = $home3; $env:HOME = $home3
+New-Item -ItemType Directory -Force -Path (Join-Path $home3 ".codex") | Out-Null
+& (Join-Path $spaced "claude-pet.exe") install-hooks | Out-Null
+$settings3 = @((Join-Path $home3 ".claude\settings.json"), (Join-Path $realHome ".claude\settings.json")) | Where-Object { Test-Path $_ } | Select-Object -First 1
+$codex3 = @((Join-Path $home3 ".codex\hooks.json"), (Join-Path $realHome ".codex\hooks.json")) | Where-Object { Test-Path $_ } | Select-Object -First 1
+$c3 = Our-Entry $settings3 "PreToolUse"
+$x3 = Our-Entry $codex3 "PreToolUse"
+Write-Host "  spaced claude command: $($c3.command)"
+Assert-Eq "spaced path in claude command" $true ("$($c3.command)".Contains("Claude Pet "))
+$state3 = New-StateDir
+$env:CLAUDE_PET_STATE_DIR = $state3
+if ($c3.shell -ne "powershell") {
+    Assert-Eq "spaced bash -c exit0" 0 (Invoke-WithStdin "bash -c '$($c3.command)'" (Join-Path $fix "pre-tool-use-hangul.json"))
+    Assert-Eq "spaced bash -c wrote state" "running" (Read-State $state3 $h.session_id).state
+    Remove-Item (Join-Path $state3 "$($h.session_id).json")
+}
+$cmdline3 = "powershell.exe -NoProfile -Command `"$($x3.commandWindows.Replace('"', '\"'))`""
+Assert-Eq "spaced codex -Command exit0" 0 (Invoke-WithStdin $cmdline3 (Join-Path $fix "pre-tool-use-hangul.json"))
+Assert-Eq "spaced codex -Command wrote state" "codex" (Read-State $state3 $h.session_id).agent
+
+# ---------- 2c. 로그인 항목 (HKCU Run) ----------
+$winExe = Join-Path $bin "ClaudePetWin.exe"
+if (Test-Path $winExe) {
+    & $exe login-item on | Out-Null
+    Assert-Eq "login-item on exit0" 0 $LASTEXITCODE
+    $reg = Get-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name ClaudePet -ErrorAction SilentlyContinue
+    Assert-Eq "login-item registered" $true ($null -ne $reg -and "$($reg.ClaudePet)".Contains("ClaudePetWin.exe"))
+    & $exe login-item off | Out-Null
+    $reg = Get-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name ClaudePet -ErrorAction SilentlyContinue
+    Assert-Eq "login-item removed" $true ($null -eq $reg)
+} else { Write-Host "skip login-item (ClaudePetWin.exe 없음)" }
 
 # ---------- 3. 콜드 스타트 ----------
 $env:CLAUDE_PET_STATE_DIR = $state
