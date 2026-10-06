@@ -69,6 +69,7 @@ public enum HookRunner {
     // MARK: Decision (pure)
 
     /// hook.sh 와 같은 규칙으로 입력을 해석해 취할 행동을 반환한다. 부수 효과 없음.
+    /// `previous` 는 이 세션의 직전 상태 파일이다. 턴 시작 시각을 이어 받는 데만 쓴다.
     public static func decide(
         input: Data,
         agent: Agent,
@@ -76,7 +77,8 @@ public enum HookRunner {
         ancestry: ProcessAncestry,
         selfPid: Int32,
         hostRule: HostAppRule,
-        now: Date
+        now: Date,
+        previous: SessionState? = nil
     ) -> HookAction {
         // 1. stdin이 비었거나 JSON 파싱 실패 → ignore
         guard !input.isEmpty,
@@ -134,10 +136,37 @@ public enum HookRunner {
                 hostApp: hostApp ?? "",
                 agentPid: agentPid ?? 0,
                 agent: agent,
+                promptTs: promptTs(event: event, state: state, previous: previous, now: now),
                 ts: now.timeIntervalSince1970
             )
             return .write(ss)
         }
+    }
+
+    /// 이번 턴을 연 프롬프트 시각. 프롬프트가 오면 새로 찍고, 턴이 이어지는 동안(작업 중·입력 대기·실패)은
+    /// 직전 파일의 값을 물려받는다. 직전 값이 없으면(훅이 턴 중간에 깔렸거나 끝난 뒤 알림이 온 경우) 지금을 시작으로 본다.
+    /// 턴이 끝나면(끝남) 물려받기만 한다. 그 파일의 ts 가 끝난 시각이라 둘의 차가 총 소요 시간이 된다.
+    /// 시작을 모르면 지어내지 않고 비워 둔다. 유휴에는 필요 없다.
+    static func promptTs(event: String, state: PetState, previous: SessionState?, now: Date) -> TimeInterval? {
+        let inTurn: Set<PetState> = [.running, .waiting, .failed]
+        var carried: TimeInterval? {
+            guard event != "UserPromptSubmit", let previous, inTurn.contains(previous.state),
+                  let ts = previous.promptTs, ts > 0 else { return nil }
+            return ts
+        }
+        if state == .review { return carried }
+        guard inTurn.contains(state) else { return nil }
+        return carried ?? now.timeIntervalSince1970
+    }
+
+    /// 직전 상태 파일. 없거나 깨졌으면 nil.
+    public static func previousState(sessionIn input: Data, stateDirectory: URL) -> SessionState? {
+        guard let parsed = try? JSONDecoder().decode(HookInput.self, from: input),
+              let sessionId = parsed.sessionId, !sessionId.isEmpty,
+              sessionId.unicodeScalars.allSatisfy({ isValidSessionChar($0) }),
+              let data = FileManager.default.contents(atPath: stateDirectory.appendingPathComponent("\(sessionId).json").path)
+        else { return nil }
+        return try? JSONDecoder().decode(SessionState.self, from: data)
     }
 
     // MARK: Execution (side effects)

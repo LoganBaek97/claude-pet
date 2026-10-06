@@ -37,6 +37,27 @@ assert_eq "ts numeric" yes "$(grep -q '"ts":[0-9][0-9]*}' "$f" && echo yes || ec
 assert_eq "host_session empty without env" "" "$(field "$f" host_session)"
 assert_eq "single line" 1 "$(wc -l < "$f" | tr -d ' ')"
 
+# 턴 시작 시각(prompt_ts): 프롬프트가 찍고, 턴이 이어지는 동안 물려받고, 끝나면 비운다.
+# 같은 초 안에 돌아 ts 와 구별이 안 되므로 직전 파일을 손으로 써서 확인한다.
+prev_file() { # state prompt_ts
+  printf '{"session_id":"sess-1","state":"%s","prompt_ts":%s,"ts":1000}\n' "$1" "$2" > "$f"
+}
+prev_file running 1000; run pre-tool-use.json
+assert_eq "prompt_ts carried while running" 1000 "$(number "$f" prompt_ts)"
+prev_file waiting 1000; run pre-tool-use.json
+assert_eq "prompt_ts carried after waiting" 1000 "$(number "$f" prompt_ts)"
+prev_file running 1000; run user-prompt-submit.json
+assert_eq "prompt resets prompt_ts" "$(number "$f" ts)" "$(number "$f" prompt_ts)"
+prev_file review 1000; run pre-tool-use.json
+assert_eq "new turn after review starts now" "$(number "$f" ts)" "$(number "$f" prompt_ts)"
+prev_file running 0; run pre-tool-use.json
+assert_eq "missing prompt_ts starts now" "$(number "$f" ts)" "$(number "$f" prompt_ts)"
+prev_file running 1000; run stop.json
+assert_eq "finished turn keeps prompt_ts for total" 1000 "$(number "$f" prompt_ts)"
+prev_file review 1000; run stop.json
+assert_eq "finished turn without live start stays empty" 0 "$(number "$f" prompt_ts)"
+run pre-tool-use.json
+
 run permission-request.json
 assert_eq "waiting" waiting "$(field "$CLAUDE_PET_STATE_DIR/sess-2.json" state)"
 # 훅 입력에 transcript_path 가 없으면 빈 값으로 남는다. 앱은 그걸 미리보기 없음으로 읽는다.

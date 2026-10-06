@@ -173,8 +173,7 @@ final class SessionBubbleView: NSView {
 
     func update(_ summary: SessionSummary, now: Date, preview: String?) {
         let title = BubbleText.title(for: summary)
-        let elapsed = BubbleText.elapsed(now.timeIntervalSince(summary.session.timestamp))
-        let detail = "\(BubbleText.detail(for: summary)) · \(elapsed)"
+        let detail = BubbleText.subtitle(for: summary, now: now)
         let isCodex = summary.session.agent == .codex
 
         if titleLabel.stringValue != title { titleLabel.stringValue = title }

@@ -47,6 +47,25 @@ Assert-Eq "agent claude" "claude" $s.agent
 Assert-Eq "host_session empty" "" $s.host_session
 Assert-Eq "agent_pid is number" $true ($s.agent_pid -is [long] -or $s.agent_pid -is [int])
 
+# 턴 시작 시각: 이어지는 동안은 직전 파일에서 물려받고, 프롬프트가 오면 새로 찍고, 끝나면 비운다.
+function Write-Prev($st, $promptTs) {
+    [IO.File]::WriteAllText((Join-Path $state "sess-1.json"), "{`"session_id`":`"sess-1`",`"state`":`"$st`",`"event`":`"`",`"tool`":`"`",`"cwd`":`"`",`"prompt_ts`":$promptTs,`"ts`":1000}")
+}
+Write-Prev "running" 1000
+Invoke-WithStdin "`"$exe`" hook" (Join-Path $fix "pre-tool-use.json") | Out-Null
+Assert-Eq "prompt_ts carried while running" 1000 (Read-State $state "sess-1").prompt_ts
+Write-Prev "running" 1000
+Invoke-WithStdin "`"$exe`" hook" (Join-Path $fix "user-prompt-submit.json") | Out-Null
+$p = Read-State $state "sess-1"
+Assert-Eq "prompt resets prompt_ts" $p.ts $p.prompt_ts
+Write-Prev "review" 1000
+Invoke-WithStdin "`"$exe`" hook" (Join-Path $fix "pre-tool-use.json") | Out-Null
+$p = Read-State $state "sess-1"
+Assert-Eq "new turn after review starts now" $p.ts $p.prompt_ts
+Write-Prev "running" 1000
+Invoke-WithStdin "`"$exe`" hook" (Join-Path $fix "stop.json") | Out-Null
+Assert-Eq "finished turn keeps prompt_ts" 1000 (Read-State $state "sess-1").prompt_ts
+
 Assert-Eq "exit0 permission-request" 0 (Invoke-WithStdin "`"$exe`" hook" (Join-Path $fix "permission-request.json"))
 Assert-Eq "state waiting" "waiting" (Read-State $state (Fixture-Id "permission-request.json")).state
 
