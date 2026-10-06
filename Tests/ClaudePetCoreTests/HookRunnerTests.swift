@@ -157,6 +157,69 @@ private func decideFixture(_ name: String, agent: Agent = .claude,
     #expect(s.hostSessionId == nil || s.hostSessionId == "")
 }
 
+// MARK: - prompt_ts (턴 시작 시각)
+
+private func previous(_ state: PetState, promptTs: TimeInterval?) -> SessionState {
+    SessionState(sessionId: "sess-1", state: state, promptTs: promptTs, ts: 1000)
+}
+
+private func decideWithPrevious(_ name: String, _ prev: SessionState?, now: Date) -> SessionState? {
+    let action = HookRunner.decide(input: fixture(name), agent: .claude, environment: [:], ancestry: emptyAncestry,
+                                   selfPid: selfPid, hostRule: .macOS, now: now, previous: prev)
+    guard case .write(let s) = action else { return nil }
+    return s
+}
+
+@Test func userPromptSubmitStartsTurn() throws {
+    let now = Date(timeIntervalSince1970: 5000)
+    let s = try #require(decideWithPrevious("user-prompt-submit.json", previous(.running, promptTs: 1000), now: now))
+    #expect(s.state == .running)
+    #expect(s.promptTs == 5000)
+}
+
+@Test func promptTsCarriedWhileTurnContinues() throws {
+    let now = Date(timeIntervalSince1970: 5000)
+    for prev in [PetState.running, .waiting, .failed] {
+        let s = try #require(decideWithPrevious("pre-tool-use.json", previous(prev, promptTs: 1000), now: now))
+        #expect(s.promptTs == 1000, "직전 \(prev)")
+    }
+    let waiting = try #require(decideWithPrevious("permission-request.json", previous(.running, promptTs: 1000), now: now))
+    #expect(waiting.promptTs == 1000)
+}
+
+/// 직전 턴이 끝났거나 값이 없으면 지금이 시작이다(훅이 턴 중간에 깔린 경우 포함).
+@Test func promptTsStartsNowWithoutLiveTurn() throws {
+    let now = Date(timeIntervalSince1970: 5000)
+    for prev in [nil, previous(.review, promptTs: 1000), previous(.idle, promptTs: nil), previous(.running, promptTs: nil)] {
+        let s = try #require(decideWithPrevious("pre-tool-use.json", prev, now: now))
+        #expect(s.promptTs == 5000)
+    }
+}
+
+/// 끝난 턴은 시작 시각을 물려받는다. 끝난 시각(ts)과의 차가 총 소요 시간이다.
+@Test func finishedTurnKeepsPromptTs() throws {
+    let s = try #require(decideWithPrevious("stop.json", previous(.running, promptTs: 1000), now: Date()))
+    #expect(s.state == .review)
+    #expect(s.promptTs == 1000)
+}
+
+/// 시작을 모르는 끝남에는 시각을 지어내지 않는다.
+@Test func finishedTurnWithoutStartHasNoPromptTs() throws {
+    for prev in [nil, previous(.review, promptTs: 1000), previous(.running, promptTs: nil)] {
+        let s = try #require(decideWithPrevious("stop.json", prev, now: Date()))
+        #expect(s.promptTs == nil)
+    }
+}
+
+@Test func previousStateReadsSessionFile() throws {
+    let dir = FileManager.default.temporaryDirectory.appendingPathComponent("pet-prev-\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: dir) }
+    #expect(HookRunner.previousState(sessionIn: fixture("pre-tool-use.json"), stateDirectory: dir) == nil)
+    HookRunner.perform(.write(previous(.running, promptTs: 1000)), stateDirectory: dir)
+    let prev = try #require(HookRunner.previousState(sessionIn: fixture("pre-tool-use.json"), stateDirectory: dir))
+    #expect(prev.promptTs == 1000)
+}
+
 // MARK: - agent_pid
 
 // 체인: hook(9999) → sh(100) → claude(200) → Ghostty(300)

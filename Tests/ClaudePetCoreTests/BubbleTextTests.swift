@@ -86,19 +86,61 @@ final class SessionBubbleTextTests: XCTestCase {
         XCTAssertEqual(BubbleText.title(for: summary(.running, cwd: "", id: "abcdef0123")), "abcdef")
     }
 
+    /// 도구 이름은 부제에 넣지 않는다.
     func testDetailPerState() {
-        XCTAssertEqual(BubbleText.detail(for: summary(.running, tool: "Bash")), "작업 중 · Bash")
-        XCTAssertEqual(BubbleText.detail(for: summary(.running)), "작업 중")
+        XCTAssertEqual(BubbleText.detail(for: summary(.running, tool: "Bash")), "작업 중")
         XCTAssertEqual(BubbleText.detail(for: summary(.waiting)), "입력 대기")
-        XCTAssertEqual(BubbleText.detail(for: summary(.failed, tool: "Bash")), "실패 · Bash")
-        XCTAssertEqual(BubbleText.detail(for: summary(.failed)), "실패")
+        XCTAssertEqual(BubbleText.detail(for: summary(.failed, tool: "Bash")), "실패")
         XCTAssertEqual(BubbleText.detail(for: summary(.review)), "끝남")
         XCTAssertEqual(BubbleText.detail(for: summary(.idle)), "유휴")
     }
 
     /// 에이전트 배지는 카드가 따로 그린다. 본문 글자에는 섞지 않는다.
     func testDetailDoesNotEmbedAgentName() {
-        XCTAssertEqual(BubbleText.detail(for: summary(.running, tool: "shell", agent: .codex)), "작업 중 · shell")
+        XCTAssertEqual(BubbleText.detail(for: summary(.running, tool: "shell", agent: .codex)), "작업 중")
+    }
+
+    /// 진행 중인 턴은 프롬프트를 보낸 때부터 센다. 마지막 도구 시각(ts)이 아니다.
+    func testSubtitleCountsFromPrompt() {
+        let s = SessionSummary(session: SessionState(sessionId: "s", state: .running, tool: "Bash",
+                                                     promptTs: 100, ts: 280), state: .running)
+        XCTAssertEqual(BubbleText.subtitle(for: s, now: Date(timeIntervalSince1970: 400)), "작업 중 · 5분")
+        let w = SessionSummary(session: SessionState(sessionId: "s", state: .waiting, promptTs: 100, ts: 390), state: .waiting)
+        XCTAssertEqual(BubbleText.subtitle(for: w, now: Date(timeIntervalSince1970: 400)), "입력 대기 · 5분")
+    }
+
+    /// 프롬프트 시각을 모르는 예전 파일은 마지막 신호부터 센다.
+    func testSubtitleFallsBackToLastSignal() {
+        XCTAssertEqual(BubbleText.subtitle(for: summary(.running, ts: 100), now: Date(timeIntervalSince1970: 130)), "작업 중 · 30초")
+    }
+
+    /// 끝난 턴은 프롬프트부터 끝날 때까지 걸린 총 시간을 단다. 지금 시각과는 상관없다.
+    func testSubtitleShowsTotalWhenFinished() {
+        func finished(_ state: PetState, event: String = "Stop", start: TimeInterval?) -> SessionSummary {
+            SessionSummary(session: SessionState(sessionId: "s", state: state, event: event,
+                                                 promptTs: start, ts: 1000), state: state)
+        }
+        let later = Date(timeIntervalSince1970: 99_999)
+        XCTAssertEqual(BubbleText.subtitle(for: finished(.review, start: 700), now: later), "끝남 · 총 5분")
+        XCTAssertEqual(BubbleText.subtitle(for: finished(.failed, event: "StopFailure", start: 958), now: later), "실패 · 총 42초")
+        // 시작을 모르면 시간을 뺀다.
+        XCTAssertEqual(BubbleText.subtitle(for: finished(.review, start: nil), now: later), "끝남")
+    }
+
+    /// 도구 실패 뒤에는 턴이 이어지므로 흐르는 시간을 단다. 유휴에는 시간이 없다.
+    func testSubtitleForMidTurnFailureAndIdle() {
+        let failed = SessionSummary(session: SessionState(sessionId: "s", state: .failed, event: "PostToolUseFailure",
+                                                          promptTs: 100, ts: 200), state: .failed)
+        XCTAssertEqual(BubbleText.subtitle(for: failed, now: Date(timeIntervalSince1970: 400)), "실패 · 5분")
+        XCTAssertEqual(BubbleText.subtitle(for: summary(.idle), now: Date(timeIntervalSince1970: 10_000)), "유휴")
+    }
+
+    func testDuration() {
+        XCTAssertEqual(BubbleText.duration(0), "1초")
+        XCTAssertEqual(BubbleText.duration(42), "42초")
+        XCTAssertEqual(BubbleText.duration(300), "5분")
+        XCTAssertEqual(BubbleText.duration(3600), "1시간")
+        XCTAssertEqual(BubbleText.duration(3600 + 25 * 60), "1시간 25분")
     }
 
     func testElapsed() {

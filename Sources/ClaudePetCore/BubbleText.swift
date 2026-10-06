@@ -53,23 +53,44 @@ public enum BubbleText {
         return String(summary.session.sessionId.prefix(6))
     }
 
-    /// 카드 부제. 상태와 도구만 담는다. 에이전트 이름은 카드가 배지로 따로 그리고,
-    /// 경과 시간은 초마다 바뀌므로 `elapsed(_:)` 로 따로 붙인다.
+    /// 카드 부제의 상태 글자. 도구 이름은 넣지 않는다(초마다 바뀌어 눈만 어지럽다).
+    /// 에이전트 이름은 카드가 배지로 따로 그린다.
     public static func detail(for summary: SessionSummary) -> String {
-        let tool = summary.session.tool
-        func join(_ a: String) -> String {
-            tool.isEmpty ? a : "\(a) · \(tool)"
-        }
         switch summary.state {
         case .idle: return "유휴"
-        case .running: return join("작업 중")
+        case .running: return "작업 중"
         case .waiting: return "입력 대기"
-        case .failed: return join("실패")
+        case .failed: return "실패"
         case .review: return "끝남"
         }
     }
 
-    /// 마지막 신호로부터 지난 시간. 한 칸만 보여 준다(`3분` 이지 `3분 20초` 가 아니다).
+    /// 카드 부제 한 줄.
+    /// 진행 중인 턴(작업 중·입력 대기, 도구 실패 뒤 이어지는 중)은 프롬프트를 보낸 때부터 흐르는 시간을,
+    /// 끝난 턴(끝남, 턴 자체가 실패로 끝남)은 프롬프트부터 끝날 때까지 걸린 총 시간을 붙인다.
+    /// 끝난 턴의 시작을 모르면 시간을 빼고, 유휴에는 붙이지 않는다.
+    public static func subtitle(for summary: SessionSummary, now: Date) -> String {
+        let detail = detail(for: summary)
+        let session = summary.session
+        let finished = summary.state == .review || (summary.state == .failed && session.event == "StopFailure")
+        if finished {
+            guard let total = session.turnDuration else { return detail }
+            return "\(detail) · 총 \(duration(total))"
+        }
+        guard summary.state.isOngoing || summary.state == .failed else { return detail }
+        return "\(detail) · \(elapsed(now.timeIntervalSince(session.turnStartedAt)))"
+    }
+
+    /// 끝난 턴의 총 시간. 흐르는 시간과 달리 "방금" 으로 뭉개지 않고, 한 시간이 넘으면 분까지 적는다.
+    public static func duration(_ seconds: TimeInterval) -> String {
+        let s = max(Int(seconds.rounded()), 1)
+        if s < 60 { return "\(s)초" }
+        if s < 3600 { return "\(s / 60)분" }
+        let m = (s % 3600) / 60
+        return m == 0 ? "\(s / 3600)시간" : "\(s / 3600)시간 \(m)분"
+    }
+
+    /// 지난 시간. 한 칸만 보여 준다(`3분` 이지 `3분 20초` 가 아니다).
     public static func elapsed(_ seconds: TimeInterval) -> String {
         let s = Int(seconds.rounded())
         if s < 5 { return "방금" }           // 음수(시계 어긋남)도 여기로 들어온다

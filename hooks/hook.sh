@@ -112,9 +112,31 @@ esac
 esc() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
 mkdir -p "$dir" 2>/dev/null || exit 0
 ts=$(date +%s)
+
+# 이번 턴을 연 프롬프트 시각. 말풍선이 경과 시간을 마지막 도구가 아니라 여기서부터 센다.
+# 이 훅은 매번 파일을 통째로 새로 쓰므로, 턴이 이어지는 동안(작업 중·입력 대기·실패)은 직전 파일에서
+# 물려받는다. 프롬프트가 오거나 직전 값이 없으면 지금이 시작이다.
+# 끝남은 물려받기만 한다(그 파일의 ts 와의 차가 총 소요 시간). 시작을 모르거나 유휴면 0(없음)이다.
+prompt_ts=0
+case "$state" in running|waiting|failed|review)
+  [ "$state" != review ] && prompt_ts=$ts
+  if [ "$event" != UserPromptSubmit ] && [ -f "$file" ]; then
+    prev=$(cat "$file" 2>/dev/null)
+    prev_state=${prev#*\"state\":\"}
+    prev_state=${prev_state%%\"*}
+    case "$prev_state" in running|waiting|failed)
+      carried=${prev#*\"prompt_ts\":}
+      if [ "$carried" != "$prev" ]; then
+        carried=${carried%%[!0-9]*}
+        case "$carried" in ''|0) ;; *) prompt_ts=$carried;; esac
+      fi;;
+    esac
+  fi;;
+esac
+
 tmp="$file.tmp.$$"
-printf '{"session_id":"%s","state":"%s","event":"%s","tool":"%s","cwd":"%s","transcript":"%s","host_session":"%s","host_pid":%s,"host_app":"%s","agent_pid":%s,"agent":"%s","ts":%s}\n' \
-  "$session" "$state" "$(esc "$event")" "$(esc "$tool")" "$(esc "$cwd")" "$(esc "$transcript")" "$host" "${host_pid:-0}" "$(esc "$host_app")" "${agent_pid:-0}" "$agent" "$ts" > "$tmp" 2>/dev/null \
+printf '{"session_id":"%s","state":"%s","event":"%s","tool":"%s","cwd":"%s","transcript":"%s","host_session":"%s","host_pid":%s,"host_app":"%s","agent_pid":%s,"agent":"%s","prompt_ts":%s,"ts":%s}\n' \
+  "$session" "$state" "$(esc "$event")" "$(esc "$tool")" "$(esc "$cwd")" "$(esc "$transcript")" "$host" "${host_pid:-0}" "$(esc "$host_app")" "${agent_pid:-0}" "$agent" "$prompt_ts" "$ts" > "$tmp" 2>/dev/null \
   && mv -f "$tmp" "$file" 2>/dev/null
 rm -f "$tmp" 2>/dev/null
 exit 0

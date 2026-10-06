@@ -182,7 +182,8 @@ case "hook":
         ancestry: hookAncestry,
         selfPid: ProcessInfo.processInfo.processIdentifier,
         hostRule: hookRule,
-        now: Date()
+        now: Date(),
+        previous: HookRunner.previousState(sessionIn: hookInput, stateDirectory: Paths.stateDirectory)
     )
     HookRunner.perform(hookAction, stateDirectory: Paths.stateDirectory)
     exit(0)

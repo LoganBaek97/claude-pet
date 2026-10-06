@@ -122,8 +122,7 @@ final class BubbleRenderer {
 
             // 텍스트는 GDI 로 그린다 (별도 함수)
             let title = BubbleText.title(for: summary)
-            let elapsed = BubbleText.elapsed(now.timeIntervalSince(summary.session.timestamp))
-            let detail = "\(BubbleText.detail(for: summary)) · \(elapsed)"
+            let detail = BubbleText.subtitle(for: summary, now: now)
             drawCardText(&surface, rect: rect, title: title, detail: detail)
 
             // 닫기 버튼 영역 (호버 중일 때만 시각적으로 보이지만 히트 영역은 항상 잡는다)
